@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "util/CpuLoadMeter.h"
+#include "CpuLedIndicator.h"
 
 #include "../../CloudSeed/Default.h"
 #include "../../CloudSeed/ReverbController.h"
@@ -36,17 +37,8 @@ daisy::CpuLoadMeter cpu_meter;
 
 CloudSeed::ReverbController* reverb = 0;
 
-// LED flash state for CPU load indication
-static bool cpu_overload_latched = false; // becomes true when load >= 95%
-static int cpu_flash_target = 0; // 0..4 flashes
-static int cpu_flash_index = 0; // current flash number
-static uint32_t cpu_flash_phase_start = 0; // ms timestamp for phase timing
-enum CpuFlashState { CFP_IDLE = 0, CFP_ON, CFP_OFF };
-static CpuFlashState cpu_flash_state = CFP_IDLE;
-// timing (ms)
-static const uint32_t CPU_FLASH_ON_MS  = 120;
-static const uint32_t CPU_FLASH_OFF_MS = 120;
-static const uint32_t CPU_FLASH_GAP_MS = 600; // gap between sequences
+// Cpu LED indicator (extracted class)
+CpuLedIndicator cpu_led_indicator;
 
 
 // For allocating delay line memory to SDRAM (64MB available on Daisy)
@@ -207,6 +199,8 @@ int main(void)
     samplerate = hw.AudioSampleRate();
     // Initialize CPU load meter for the audio configuration
     cpu_meter.Init(samplerate, hw.AudioBlockSize());
+    // Initialize CPU LED indicator
+    cpu_led_indicator.Init(hw);
     c = 0;
 
     AudioLib::ValueTables::Init();
@@ -246,76 +240,12 @@ int main(void)
         uint32_t now_ms = System::GetNow();
         if ((now_ms - last_ms) >= 250) {
             float load = cpu_meter.GetAvgCpuLoad() * 100.0f;
-            // Latch on if load >= 95%
-            if (load >= 95.0f) {
-                cpu_overload_latched = true;
-                hw.seed.SetLed(true);
-            } else if (!cpu_overload_latched) {
-                // determine flash count: 1 for >=20, 2 for >=40, 3 for >=60, 4 for >=80
-                int target = 0;
-                if (load >= 80.0f) target = 4;
-                else if (load >= 60.0f) target = 3;
-                else if (load >= 40.0f) target = 2;
-                else if (load >= 20.0f) target = 1;
-                else target = 0;
-                cpu_flash_target = target;
-                // reset sequence if target changed
-                if (cpu_flash_index != 0 && cpu_flash_target != target) {
-                    cpu_flash_index = 0;
-                    cpu_flash_state = CFP_IDLE;
-                }
-            }
+            cpu_led_indicator.UpdateFromLoad(load, now_ms);
             last_ms = now_ms;
         }
 
-        // Advance LED flash state machine (non-blocking)
-        if (!cpu_overload_latched) {
-            uint32_t t = System::GetNow();
-            switch (cpu_flash_state) {
-                case CFP_IDLE:
-                    if (cpu_flash_target > 0) {
-                        // only start a new sequence after the configured gap
-                        if (cpu_flash_phase_start == 0 || (t - cpu_flash_phase_start) >= CPU_FLASH_GAP_MS) {
-                            // start first ON phase
-                            cpu_flash_state = CFP_ON;
-                            cpu_flash_phase_start = t;
-                            hw.seed.SetLed(true);
-                            cpu_flash_index = 1;
-                        } else {
-                            // keep LED off during gap
-                            hw.seed.SetLed(false);
-                        }
-                    } else {
-                        hw.seed.SetLed(false);
-                    }
-                    break;
-                case CFP_ON:
-                    if ((t - cpu_flash_phase_start) >= CPU_FLASH_ON_MS) {
-                        // move to OFF between flashes
-                        cpu_flash_state = CFP_OFF;
-                        cpu_flash_phase_start = t;
-                        hw.seed.SetLed(false);
-                    }
-                    break;
-                case CFP_OFF:
-                    if ((t - cpu_flash_phase_start) >= CPU_FLASH_OFF_MS) {
-                        if (cpu_flash_index < cpu_flash_target) {
-                            // start next ON
-                            cpu_flash_index++;
-                            cpu_flash_state = CFP_ON;
-                            cpu_flash_phase_start = t;
-                            hw.seed.SetLed(true);
-                        } else {
-                            // finished sequence; gap then restart
-                            cpu_flash_state = CFP_IDLE;
-                            cpu_flash_phase_start = t; // used for gap, but we simply wait until next sample update
-                            hw.seed.SetLed(false);
-                            cpu_flash_index = 0;
-                        }
-                    }
-                    break;
-            }
-        }
+        // advance indicator state machine
+        cpu_led_indicator.Tick(System::GetNow());
         System::Delay(10);
     }
 }
