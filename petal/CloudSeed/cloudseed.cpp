@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <math.h>
 #include "util/CpuLoadMeter.h"
 #include "CpuLedIndicator.h"
 
@@ -26,11 +27,16 @@ DaisyPetal hw;
 ::daisy::Parameter dry, earlyOut, mainOut, time, diffusion, tapDecay;
 
 bool bypass;
+bool pendingBypass;
 int c;
 Led led1, led2;
 
 float prevEarlyOut, prevMainOut, prevTime, prevDiffusion, prevTapDecay;
 int prevNumLines;
+// deadband threshold: ignore changes smaller than one step (0.002 ~= 1/500)
+constexpr float PARAM_EPS = 0.002f;
+// update analog controls every N audio blocks to reduce audio-thread work
+constexpr int CONTROL_UPDATE_BLOCKS = 4;
 
 // libDaisy CPU load meter (only keep what's needed)
 daisy::CpuLoadMeter cpu_meter;
@@ -95,42 +101,56 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     // Notify CpuLoadMeter of block start
     cpu_meter.OnBlockStart();
 
-    //hw.ProcessAllControls();
-    hw.ProcessAnalogControls();
+    // Process digital controls every block (fast)
     hw.ProcessDigitalControls();
     led1.Update();
     led2.Update();
 
-    float dry_val = dry.Process();
-    float earlyout_value = earlyOut.Process();
-    float mainout_value = mainOut.Process();
-    float time_value = time.Process();
-    float diffusion_value = diffusion.Process();
-    float tap_decay_value = tapDecay.Process();
+    // Downsample analog control reads to reduce ADC work and avoid
+    // calling SetParameter unnecessarily every audio block.
+    static int control_block_ctr = 0;
+    static float cached_dry = 0.0f, cached_early = 0.0f, cached_main = 0.0f,
+                 cached_time = 0.0f, cached_diffusion = 0.0f, cached_tap = 0.0f;
 
-    if ((prevEarlyOut < earlyout_value) || ( prevEarlyOut> earlyout_value)) {
-        reverb->SetParameter(::Parameter::EarlyOut, earlyout_value);
-        prevEarlyOut = earlyout_value;
+    if (++control_block_ctr >= CONTROL_UPDATE_BLOCKS)
+    {
+        control_block_ctr = 0;
+        hw.ProcessAnalogControls();
+        cached_dry       = dry.Process();
+        cached_early     = earlyOut.Process();
+        cached_main      = mainOut.Process();
+        cached_time      = time.Process();
+        cached_diffusion = diffusion.Process();
+        cached_tap       = tapDecay.Process();
+
+        if (fabsf(prevEarlyOut - cached_early) > PARAM_EPS) {
+            reverb->SetParameter(::Parameter::EarlyOut, cached_early);
+            prevEarlyOut = cached_early;
+        }
+        if (fabsf(prevMainOut - cached_main) > PARAM_EPS) {
+            reverb->SetParameter(::Parameter::MainOut, cached_main);
+            prevMainOut = cached_main;
+        }
+        if (fabsf(prevTime - cached_time) > PARAM_EPS) {
+            reverb->SetParameter(::Parameter::LineDecay, cached_time);
+            prevTime = cached_time;
+        }
+        if (fabsf(prevDiffusion - cached_diffusion) > PARAM_EPS) {
+            reverb->SetParameter(::Parameter::LateDiffusionFeedback, cached_diffusion);
+            prevDiffusion = cached_diffusion;
+        }
+        if (fabsf(prevTapDecay - cached_tap) > PARAM_EPS) {
+            reverb->SetParameter(::Parameter::TapDecay, cached_tap);
+            prevTapDecay = cached_tap;
+        }
     }
 
-    if ((prevMainOut < mainout_value) || ( prevMainOut > mainout_value)) {
-        reverb->SetParameter(::Parameter::MainOut, mainout_value);
-        prevMainOut = mainout_value;
-    }
-
-    if ((prevTime < time_value) || ( prevTime > time_value)) {
-        reverb->SetParameter(::Parameter::LineDecay, time_value);
-        prevTime = time_value;
-    }
-    if ((prevDiffusion < diffusion_value) || ( prevDiffusion > diffusion_value)) {
-        reverb->SetParameter(::Parameter::LateDiffusionFeedback, diffusion_value);
-        prevDiffusion = diffusion_value;
-    }
-
-    if ((prevTapDecay < tap_decay_value) || ( prevTapDecay > tap_decay_value)) {
-        reverb->SetParameter(::Parameter::TapDecay, tap_decay_value);
-        prevTapDecay = tap_decay_value;
-    }
+    float dry_val        = cached_dry;
+    float earlyout_value = cached_early;
+    float mainout_value  = cached_main;
+    float time_value     = cached_time;
+    float diffusion_value= cached_diffusion;
+    float tap_decay_value= cached_tap;
 
 
     // Delay Line Switches
@@ -154,33 +174,37 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     float reverbIn[48];
     float reverbOut[48];
 
-    for (size_t i = 0; i < size; i++) {
-        reverbIn[i] = in[0][i];
-    }
+
 
     // ToDo: Do footswitches need de-bouncing?
+    
+    // Cycle available models
+    if (hw.switches[Terrarium::FOOTSWITCH_2].RisingEdge()) {  
+        cyclePreset();
+    }
+    
     // (De-)Activate bypass and toggle LED when left footswitch is pressed
-    if(hw.switches[Terrarium::FOOTSWITCH_1].RisingEdge()) {
+    if (hw.switches[Terrarium::FOOTSWITCH_1].RisingEdge()) {
+
         bypass = !bypass;
         led1.Set(bypass ? 0.0f : 1.0f);
     }
-
-    // Cycle available models
-    if(hw.switches[Terrarium::FOOTSWITCH_2].RisingEdge()) {  
-        cyclePreset();
-    }
-
-    if(!bypass) {
-        reverb->Process(reverbIn, reverbOut, 48);
-        for (size_t i = 0; i < size; i++) {  
-            // External dry passthrough + wet only from reverb
-            out[0][i] = (in[0][i] * dry_val) + reverbOut[i];
+    
+    if (!bypass) {
+        for (size_t i = 0; i < size; i++) {
+            reverbIn[i] = in[0][i];
         }
-    }
+    }    
     else {
-        for (size_t i = 0; i < size; i++) {  
-            out[0][i] = (in[0][i] * dry_val);
+        for (size_t i = 0; i < size; i++) {
+            reverbIn[i] = 0;
         }
+    }
+        
+    reverb->Process(reverbIn, reverbOut, 48);
+
+    for (size_t i = 0; i < size; i++) {  
+        out[0][i] = (in[0][i] * dry_val) + reverbOut[i];
     }
 
     // Notify CpuLoadMeter of block end
@@ -214,12 +238,13 @@ int main(void)
     tapDecay.Init(hw.knob[Terrarium::KNOB_5], 0.0f, 1.0f, ::daisy::Parameter::LINEAR); 
     time.Init(hw.knob[Terrarium::KNOB_6], 0.0f, 1.0f, ::daisy::Parameter::LINEAR); 
 
-    prevEarlyOut = 0.0;
-    prevMainOut = 0.0;
-    prevTime = 0.0;
-    prevDiffusion = 0.0;
-    prevTapDecay = 0.0;
-    prevNumLines = 5;
+    // initialize prev values to sentinel to force initial parameter setup
+    prevEarlyOut = -1.0f;
+    prevMainOut = -1.0f;
+    prevTime = -1.0f;
+    prevDiffusion = -1.0f;
+    prevTapDecay = -1.0f;
+    prevNumLines = -1;
 
     led1.Init(hw.seed.GetPin(Terrarium::LED_1), false);
     led1.Update();
