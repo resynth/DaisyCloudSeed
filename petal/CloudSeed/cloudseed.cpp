@@ -23,7 +23,7 @@ using namespace daisysp;
 using namespace terrarium;  // This is important for mapping the correct controls to the Daisy Seed on Terrarium PCB
 
 DaisyPetal hw;
-::daisy::Parameter earlyOut, mainOut, time, diffusion, tapDecay;
+::daisy::Parameter dry, earlyOut, mainOut, time, diffusion, tapDecay;
 
 bool bypass;
 int c;
@@ -105,12 +105,12 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     led1.Update();
     led2.Update();
 
+    float dry_val = dry.Process();
     float earlyout_value = earlyOut.Process();
     float mainout_value = mainOut.Process();
     float time_value = time.Process();
     float diffusion_value = diffusion.Process();
     float tap_decay_value = tapDecay.Process();
-
 
     if ((prevEarlyOut < earlyout_value) || ( prevEarlyOut> earlyout_value)) {
         reverb->SetParameter(::Parameter::EarlyOut, earlyout_value);
@@ -178,12 +178,12 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
         reverb->Process(reverbIn, reverbOut, 48);
         for (size_t i = 0; i < size; i++) {  
             // External dry passthrough + wet only from reverb
-            out[0][i] = in[0][i] + reverbOut[i];
+            out[0][i] = (in[0][i] * dry_val) + reverbOut[i];
         }
     }
     else {
         for (size_t i = 0; i < size; i++) {  
-            out[0][i] = in[0][i];
+            out[0][i] = (in[0][i] * dry_val);
         }
     }
 
@@ -208,12 +208,10 @@ int main(void)
     
     reverb = new CloudSeed::ReverbController(samplerate);
     reverb->ClearBuffers();
-    //reverb->initFactoryChorus();
-
-    //hw.SetAudioBlockSize(4);
 
     bypass = true;
 
+    dry.Init(hw.knob[Terrarium::KNOB_1], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     earlyOut.Init(hw.knob[Terrarium::KNOB_2], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     mainOut.Init(hw.knob[Terrarium::KNOB_3], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     diffusion.Init(hw.knob[Terrarium::KNOB_4], 0.0f, 1.0f, ::daisy::Parameter::LINEAR); 
@@ -225,7 +223,7 @@ int main(void)
     prevTime = 0.0;
     prevDiffusion = 0.0;
     prevTapDecay = 0.0;
-    prevNumLines = 5.0; // Set to max number of delay lines initially
+    prevNumLines = 5;
 
     led1.Init(hw.seed.GetPin(Terrarium::LED_1), false);
     led1.Update();

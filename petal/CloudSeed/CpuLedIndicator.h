@@ -1,5 +1,4 @@
 #pragma once
-
 #include "daisy_petal.h"
 
 class CpuLedIndicator {
