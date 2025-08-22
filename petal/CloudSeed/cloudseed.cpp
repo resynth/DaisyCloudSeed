@@ -7,6 +7,10 @@
 #include "daisysp.h"
 #include "terrarium.h"
 
+#include <stdio.h>
+#include <stdint.h>
+#include "util/CpuLoadMeter.h"
+
 #include "../../CloudSeed/Default.h"
 #include "../../CloudSeed/ReverbController.h"
 #include "../../CloudSeed/FastSin.h"
@@ -24,11 +28,13 @@ bool bypass;
 int c;
 Led led1, led2;
 
-// Initialize previous values
 float prevEarlyOut, prevMainOut, prevTime, prevDiffusion, prevTapDecay;
 int prevNumLines;
 
-CloudSeed::ReverbController* reverb = 0;  
+// libDaisy CPU load meter (only keep what's needed)
+daisy::CpuLoadMeter cpu_meter;
+
+CloudSeed::ReverbController* reverb = 0;
 
 
 // For allocating delay line memory to SDRAM (64MB available on Daisy)
@@ -86,6 +92,9 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
                           AudioHandle::OutputBuffer out,
                           size_t                    size)
 {
+    // Notify CpuLoadMeter of block start
+    cpu_meter.OnBlockStart();
+
     //hw.ProcessAllControls();
     hw.ProcessAnalogControls();
     hw.ProcessDigitalControls();
@@ -128,6 +137,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     //     - The .Pressed() function below counts an 'ON' switch as pressed.
     //     - Total number of switches on sets how many delay lines are activated (1 - 5)
     int switches[4] = {Terrarium::SWITCH_1, Terrarium::SWITCH_2, Terrarium::SWITCH_3, Terrarium::SWITCH_4}; // Can this be moved elsewhere?
+    
     int numDelayLines = 1;
     for(int i=0; i<4; i++) {
         if (hw.switches[switches[i]].Pressed()) {
@@ -172,6 +182,9 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
             out[0][i] = in[0][i];
         }
     }
+
+    // Notify CpuLoadMeter of block end
+    cpu_meter.OnBlockEnd();
 }
 
 int main(void)
@@ -180,6 +193,8 @@ int main(void)
 
     hw.Init();
     samplerate = hw.AudioSampleRate();
+    // Initialize CPU load meter for the audio configuration
+    cpu_meter.Init(samplerate, hw.AudioBlockSize());
     c = 0;
 
     AudioLib::ValueTables::Init();
@@ -187,7 +202,7 @@ int main(void)
     
     reverb = new CloudSeed::ReverbController(samplerate);
     reverb->ClearBuffers();
-    reverb->initFactoryChorus();
+    //reverb->initFactoryChorus();
 
     //hw.SetAudioBlockSize(4);
 
@@ -215,6 +230,18 @@ int main(void)
     hw.StartAudio(AudioCallback);
 
     while(1) {
+        static uint32_t last_ms = 0;
+        uint32_t now_ms = System::GetNow();
+        if ((now_ms - last_ms) >= 250) {
+            float load = cpu_meter.GetAvgCpuLoad() * 100.0f;
+            // Turn on onboard LED if CPU load exceeds %
+            if (load > 50.0f) {
+                hw.seed.SetLed(true);
+            } else {
+                hw.seed.SetLed(false);
+            }
+            last_ms = now_ms;
+        }
         System::Delay(10);
     }
 }
