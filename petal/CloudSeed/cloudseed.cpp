@@ -136,7 +136,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
 
         // When bypassing allow trails then fade everything off before we stop processing reverb
         if (bypassing) {
-            if (--earlyBypassCountdown <= 0 && earlyBypassCountdown > 0 - EARLY_BYPASS_BLOCKS) {
+            if (--earlyBypassCountdown <= 0 && earlyBypassCountdown > -EARLY_BYPASS_BLOCKS) {
                 float earlyReduxFactor = 1.0f - ((float)abs(earlyBypassCountdown) / (float)EARLY_BYPASS_BLOCKS);
                 earlyValue *= earlyReduxFactor;     
             }
