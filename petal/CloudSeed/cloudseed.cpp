@@ -140,7 +140,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
                 float earlyReduxFactor = 1.0f - ((float)(-earlyBypassCountdown) / (float)EARLY_BYPASS_BLOCKS);
                 earlyValue *= earlyReduxFactor;     
             }
-            else if (earlyBypassCountdown <= 0 - EARLY_BYPASS_BLOCKS) {
+            else if (earlyBypassCountdown <= -EARLY_BYPASS_BLOCKS) {
                 earlyValue = 0;
 
                 if (--lateBypassCountdown > 0) {
