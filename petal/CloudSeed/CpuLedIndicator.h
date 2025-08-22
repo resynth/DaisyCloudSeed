@@ -7,18 +7,15 @@ class CpuLedIndicator {
   void Init(daisy::DaisyPetal& hw) { hw_ = &hw; }
   // Call when you have a new averaged CPU load sample (percent 0..100)
   void UpdateFromLoad(float loadPercent, uint32_t nowMs) {
-    if (loadPercent >= 95.0f) {
-      latched_ = true;
+    if (loadPercent >= 91.0f) {
       if (hw_) hw_->seed.SetLed(true);
       return;
     }
-    if (latched_) return; // already latched
-
     int newTarget = 0;
-    if (loadPercent >= 80.0f) newTarget = 4;
-    else if (loadPercent >= 60.0f) newTarget = 3;
-    else if (loadPercent >= 40.0f) newTarget = 2;
-    else if (loadPercent >= 20.0f) newTarget = 1;
+    if (loadPercent >= 71.0f) newTarget = 4;
+    else if (loadPercent >= 51.0f) newTarget = 3;
+    else if (loadPercent >= 31.0f) newTarget = 2;
+    else if (loadPercent >= 11.0f) newTarget = 1;
     else newTarget = 0;
 
     if (newTarget != target_) {
@@ -31,7 +28,6 @@ class CpuLedIndicator {
   // Call frequently from your main loop to advance non-blocking flash state
   void Tick(uint32_t nowMs) {
     if (!hw_) return;
-    if (latched_) return;
 
     switch (state_) {
       case IDLE:
@@ -75,7 +71,6 @@ class CpuLedIndicator {
 
   private:
   daisy::DaisyPetal* hw_ = nullptr;
-  bool latched_ = false;
   int target_ = 0;
   int index_ = 0;
   uint32_t phase_start_ = 0;

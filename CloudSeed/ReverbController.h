@@ -37,18 +37,23 @@ namespace CloudSeed
 			//, channelR(bufferSize, samplerate, ChannelLR::Right)
 		{
 			this->samplerate = samplerate;
-			initFactoryChorus();
+			//initFactoryChorus();
 			//initFactoryDullEchos();
 			//initFactoryHyperplane();
 			//initFactoryMediumSpace();
 			//initFactoryNoiseInTheHallway();
 			//initFactoryRubiKaFields();
-			//initFactorySmallRoom();
+			initFactorySmallRoom();
 			//initFactory90sAreBack();
 			//initFactoryThroughTheLookingGlass();
 			
 		}
 
+		/**
+		 * 60%
+		 * Late early reflections, lovely long ambience.
+		 * Medium diffusion, nice modulation.
+		 */
 		void initFactoryChorus()
 		{
 			//parameters from Chorus Delay in
@@ -107,7 +112,11 @@ namespace CloudSeed
 
 		}
 
-
+		/**
+		 * 40% CPU
+		 * Late diffusion off, short lines, reads echoey and sparse.
+		 * Bit too much deep slow pitch modulation, might be nice if sped up a little.
+		 */
 		void initFactoryDullEchos()
 		{
 			//parameters from Dull Echos in
@@ -166,7 +175,11 @@ namespace CloudSeed
 
 		}
 
-	
+		/**
+		 * 80% CPU
+		 * Bright, tight early reflections, lots of lines and shelves. 
+		 * Modulation rates/amounts can feel seasick.
+		 */
 		void initFactoryHyperplane()
 		{
 			//parameters from Hyperplane in
@@ -225,6 +238,11 @@ namespace CloudSeed
 
 		}
 
+		/**
+		 * 80% CPU, clix
+		 * B; Nice but buffer under-runs
+		 * Balanced, nice slight darkness, higher early/late diffusion, moderate line decay.
+		 */
 		void initFactoryMediumSpace()
 		{
 			//parameters from Medium Space in
@@ -283,6 +301,10 @@ namespace CloudSeed
 
 		}
 
+		/**
+		 * 80% CPU
+		 * Gritty, sparse taps, no modulation, late stages low/off, gritty static vibe.
+		 */
 		void initFactoryNoiseInTheHallway()
 		{
 			//parameters from Noise In The Hallway in
@@ -341,6 +363,14 @@ namespace CloudSeed
 
 		}
 
+		/**
+		 * 80% CPU
+		 * Big, smooth field.  Diffuse, long lines, late taps.
+		 * Early reflections: full 500ms tap window with diffusion and feedback, keep earlyOut low so they just feed the network.
+		 * Light modulation in early lines, stronger in later lines to de-ring but avoids chorus.
+		 * Not much filtering & no interpolation helps CPU.
+		 * Seeds crossfeed and are decorrelated for low periodicity.
+		 */
 		void initFactoryRubiKaFields()
 		{
 			//parameters from Rubi-Ka Fields in
@@ -399,7 +429,9 @@ namespace CloudSeed
 
 		}
 
-		
+		/**
+		 * 60% CPU
+		 */
 		void initFactorySmallRoom()
 		{
 			//parameters from Small Room in
@@ -457,6 +489,9 @@ namespace CloudSeed
 
 		}
 
+		/**
+		 * B; Hideous chorus.
+		 */
 		void initFactory90sAreBack()
 		{
 			//parameters from The 90s Are Back in
@@ -514,6 +549,9 @@ namespace CloudSeed
 
 		}
 
+		/**
+		 * Max diffusion stages and long lines → heavy CPU and not so good with only 5 delay lines.
+		 */
 		void initFactoryThroughTheLookingGlass()
 		{
 			//parameters from Through The Looking Glass in
@@ -568,8 +606,910 @@ namespace CloudSeed
 			{
 				SetParameter((Parameter)value, parameters[value]);
 			}
-
 		}
+
+
+		// GPT-5 made presets based on what I do/don't like from the factory presets
+			
+		/**
+		 * B; Sounds a little artificialy chorusy.
+		 * VelvetVibratoPlane: smooth “plate-ish” tail, bright, vibrato-rate modulation with restrained depth.
+		 */
+		void initGpt5VelvetVibratoPlane()
+		{
+			parameters[(int)Parameter::InputMix] = 0.15f;
+			parameters[(int)Parameter::PreDelay] = 0.01f; // ~10 ms, shorter than FactoryChorus
+			parameters[(int)Parameter::HighPass] = 0.25f;
+			parameters[(int)Parameter::LowPass] = 0.90f;
+
+			parameters[(int)Parameter::TapCount] = 0.45f;
+			parameters[(int)Parameter::TapLength] = 0.35f;
+			parameters[(int)Parameter::TapGain] = 0.95f;
+			parameters[(int)Parameter::TapDecay] = 0.95f;
+
+			parameters[(int)Parameter::DiffusionEnabled] = 1.0f;
+			parameters[(int)Parameter::DiffusionStages] = 0.57f;
+			parameters[(int)Parameter::DiffusionDelay] = 0.30f;
+			parameters[(int)Parameter::DiffusionFeedback] = 0.64f;
+
+			//parameters[(int)Parameter::LineCount] = ...; // hardware-managed
+			parameters[(int)Parameter::LineDelay] = 0.33f;
+			parameters[(int)Parameter::LineDecay] = 0.75f;
+
+			parameters[(int)Parameter::LateDiffusionEnabled] = 1.0f;
+			parameters[(int)Parameter::LateDiffusionStages] = 0.57f;
+			parameters[(int)Parameter::LateDiffusionDelay] = 0.30f;
+			parameters[(int)Parameter::LateDiffusionFeedback] = 0.62f;
+
+			parameters[(int)Parameter::PostLowShelfGain] = 0.90f;
+			parameters[(int)Parameter::PostLowShelfFrequency] = 0.20f;
+			parameters[(int)Parameter::PostHighShelfGain] = 0.90f;
+			parameters[(int)Parameter::PostHighShelfFrequency] = 0.70f;
+			parameters[(int)Parameter::PostCutoffFrequency] = 0.80f;
+
+			// Vibrato-speed motion, restrained depth
+			parameters[(int)Parameter::EarlyDiffusionModAmount] = 0.12f;
+			parameters[(int)Parameter::EarlyDiffusionModRate] = 0.90f;
+			parameters[(int)Parameter::LineModAmount] = 0.22f;
+			parameters[(int)Parameter::LineModRate] = 0.88f;
+			parameters[(int)Parameter::LateDiffusionModAmount] = 0.14f;
+			parameters[(int)Parameter::LateDiffusionModRate] = 0.86f;
+
+			parameters[(int)Parameter::TapSeed] = 0.000421f;
+			parameters[(int)Parameter::DiffusionSeed] = 0.000271f;
+			parameters[(int)Parameter::DelaySeed] = 0.000389f;
+			parameters[(int)Parameter::PostDiffusionSeed] = 0.000451f;
+			parameters[(int)Parameter::CrossSeed] = 0.60f;
+
+			parameters[(int)Parameter::DryOut] = 0.95f;
+			parameters[(int)Parameter::PredelayOut] = 0.0f;
+			parameters[(int)Parameter::EarlyOut] = 0.80f;
+			parameters[(int)Parameter::MainOut] = 0.82f;
+
+			parameters[(int)Parameter::HiPassEnabled] = 1.0f;
+			parameters[(int)Parameter::LowPassEnabled] = 1.0f;
+			parameters[(int)Parameter::LowShelfEnabled] = 1.0f;
+			parameters[(int)Parameter::HighShelfEnabled] = 1.0f;
+			parameters[(int)Parameter::CutoffEnabled] = 1.0f;
+			parameters[(int)Parameter::LateStageTap] = 1.0f;
+			parameters[(int)Parameter::Interpolation] = 1.0f;
+
+			for (auto i = 0; i < (int)Parameter::Count; ++i)
+				SetParameter((Parameter)i, parameters[i]);
+		}
+		
+		/**
+		 * B; Slightly chorusy.  Can hear buffer under-runs.
+		 * WideMediumRoom: a larger, airier MediumSpace; more bloom, still controlled.
+		 */
+		void initGpt5WideMediumRoom()
+		{
+			parameters[(int)Parameter::InputMix] = 0.0f;
+			parameters[(int)Parameter::PreDelay] = 0.02f; // ~20 ms
+			parameters[(int)Parameter::HighPass] = 0.10f;
+			parameters[(int)Parameter::LowPass] = 0.80f;
+
+			parameters[(int)Parameter::TapCount] = 0.55f;
+			parameters[(int)Parameter::TapLength] = 0.30f;
+			parameters[(int)Parameter::TapGain] = 0.75f;
+			parameters[(int)Parameter::TapDecay] = 0.95f;
+
+			parameters[(int)Parameter::DiffusionEnabled] = 1.0f;
+			parameters[(int)Parameter::DiffusionStages] = 0.71f;
+			parameters[(int)Parameter::DiffusionDelay] = 0.50f;
+			parameters[(int)Parameter::DiffusionFeedback] = 0.70f;
+
+			//parameters[(int)Parameter::LineCount] = ...;
+			parameters[(int)Parameter::LineDelay] = 0.62f;
+			parameters[(int)Parameter::LineDecay] = 0.68f;
+
+			parameters[(int)Parameter::LateDiffusionEnabled] = 1.0f;
+			parameters[(int)Parameter::LateDiffusionStages] = 0.57f;
+			parameters[(int)Parameter::LateDiffusionDelay] = 0.60f;
+			parameters[(int)Parameter::LateDiffusionFeedback] = 0.68f;
+
+			parameters[(int)Parameter::PostLowShelfGain] = 0.85f;
+			parameters[(int)Parameter::PostLowShelfFrequency] = 0.20f;
+			parameters[(int)Parameter::PostHighShelfGain] = 0.80f;
+			parameters[(int)Parameter::PostHighShelfFrequency] = 0.56f;
+			parameters[(int)Parameter::PostCutoffFrequency] = 0.78f;
+
+			// Subtle vibrato-rate motion
+			parameters[(int)Parameter::EarlyDiffusionModAmount] = 0.10f;
+			parameters[(int)Parameter::EarlyDiffusionModRate] = 0.80f;
+			parameters[(int)Parameter::LineModAmount] = 0.12f;
+			parameters[(int)Parameter::LineModRate] = 0.82f;
+			parameters[(int)Parameter::LateDiffusionModAmount] = 0.12f;
+			parameters[(int)Parameter::LateDiffusionModRate] = 0.84f;
+
+			parameters[(int)Parameter::TapSeed] = 0.000251f;
+			parameters[(int)Parameter::DiffusionSeed] = 0.000403f;
+			parameters[(int)Parameter::DelaySeed] = 0.000177f;
+			parameters[(int)Parameter::PostDiffusionSeed] = 0.000569f;
+			parameters[(int)Parameter::CrossSeed] = 0.50f;
+
+			parameters[(int)Parameter::DryOut] = 1.0f;
+			parameters[(int)Parameter::PredelayOut] = 0.0f;
+			parameters[(int)Parameter::EarlyOut] = 0.72f;
+			parameters[(int)Parameter::MainOut] = 0.88f;
+
+			parameters[(int)Parameter::HiPassEnabled] = 0.0f;
+			parameters[(int)Parameter::LowPassEnabled] = 1.0f;
+			parameters[(int)Parameter::LowShelfEnabled] = 1.0f;
+			parameters[(int)Parameter::HighShelfEnabled] = 0.0f;
+			parameters[(int)Parameter::CutoffEnabled] = 1.0f;
+			parameters[(int)Parameter::LateStageTap] = 1.0f;
+			parameters[(int)Parameter::Interpolation] = 1.0f;
+
+			for (auto i = 0; i < (int)Parameter::Count; ++i)
+				SetParameter((Parameter)i, parameters[i]);
+		}
+		
+		/**
+		 * HallwayVibe: keeps the hallway grit, adds subtle vibrato-speed motion and a touch of early taps.
+		 */
+		void initGpt5HallwayVibe()
+		{
+			parameters[(int)Parameter::InputMix] = 0.0f;
+			parameters[(int)Parameter::PreDelay] = 0.01f; // ~10 ms
+			parameters[(int)Parameter::HighPass] = 0.05f;
+			parameters[(int)Parameter::LowPass] = 0.64f;
+
+			// Sparse taps to complement the hallway vibe
+			parameters[(int)Parameter::TapCount] = 0.20f;
+			parameters[(int)Parameter::TapLength] = 0.60f;
+			parameters[(int)Parameter::TapGain] = 0.55f;
+			parameters[(int)Parameter::TapDecay] = 0.85f;
+
+			parameters[(int)Parameter::DiffusionEnabled] = 1.0f;
+			parameters[(int)Parameter::DiffusionStages] = 0.35f;
+			parameters[(int)Parameter::DiffusionDelay] = 0.38f;
+			parameters[(int)Parameter::DiffusionFeedback] = 0.62f;
+
+			//parameters[(int)Parameter::LineCount] = ...;
+			parameters[(int)Parameter::LineDelay] = 0.38f;
+			parameters[(int)Parameter::LineDecay] = 0.58f;
+
+			parameters[(int)Parameter::LateDiffusionEnabled] = 1.0f;
+			parameters[(int)Parameter::LateDiffusionStages] = 0.10f;
+			parameters[(int)Parameter::LateDiffusionDelay] = 0.62f;
+			parameters[(int)Parameter::LateDiffusionFeedback] = 0.52f;
+
+			parameters[(int)Parameter::PostLowShelfGain] = 0.10f;
+			parameters[(int)Parameter::PostLowShelfFrequency] = 0.00f;
+			parameters[(int)Parameter::PostHighShelfGain] = 0.78f;
+			parameters[(int)Parameter::PostHighShelfFrequency] = 0.56f;
+			parameters[(int)Parameter::PostCutoffFrequency] = 0.20f;
+
+			// Subtle, vibrato-speed modulation
+			parameters[(int)Parameter::EarlyDiffusionModAmount] = 0.06f;
+			parameters[(int)Parameter::EarlyDiffusionModRate] = 0.78f;
+			parameters[(int)Parameter::LineModAmount] = 0.08f;
+			parameters[(int)Parameter::LineModRate] = 0.80f;
+			parameters[(int)Parameter::LateDiffusionModAmount] = 0.06f;
+			parameters[(int)Parameter::LateDiffusionModRate] = 0.82f;
+
+			parameters[(int)Parameter::TapSeed] = 0.000129f;
+			parameters[(int)Parameter::DiffusionSeed] = 0.000219f;
+			parameters[(int)Parameter::DelaySeed] = 0.000191f;
+			parameters[(int)Parameter::PostDiffusionSeed] = 0.000102f;
+			parameters[(int)Parameter::CrossSeed] = 1.0f;
+
+			// Slightly wet-leaning but usable in-line
+			parameters[(int)Parameter::DryOut] = 0.80f;
+			parameters[(int)Parameter::PredelayOut] = 0.0f;
+			parameters[(int)Parameter::EarlyOut] = 0.68f;
+			parameters[(int)Parameter::MainOut] = 0.68f;
+
+			parameters[(int)Parameter::HiPassEnabled] = 1.0f;
+			parameters[(int)Parameter::LowPassEnabled] = 1.0f;
+			parameters[(int)Parameter::LowShelfEnabled] = 0.0f;
+			parameters[(int)Parameter::HighShelfEnabled] = 1.0f;
+			parameters[(int)Parameter::CutoffEnabled] = 0.0f;
+			parameters[(int)Parameter::LateStageTap] = 0.0f;
+			parameters[(int)Parameter::Interpolation] = 1.0f;
+
+			for (auto i = 0; i < (int)Parameter::Count; ++i)
+				SetParameter((Parameter)i, parameters[i]);
+		}
+
+		/**
+		 * B; nice but slightly metallic
+		 * Dense medium-large hall.
+		 * Short pre-delay, fast build, 2–3 s tail.
+		 * No modulation, high diffusion, asymmetric timings, varied seeds.
+		 */
+		void initGpt5NaturalHallDense()
+		{
+			parameters[(int)Parameter::InputMix] = 0.0f;
+			parameters[(int)Parameter::PreDelay] = 0.012f; // ~12 ms
+			parameters[(int)Parameter::HighPass] = 0.08f;
+			parameters[(int)Parameter::LowPass] = 0.72f;
+
+			// Early reflections: moderately dense, fast build
+			parameters[(int)Parameter::TapCount]  = 0.65f;
+			parameters[(int)Parameter::TapLength] = 0.45f;
+			parameters[(int)Parameter::TapGain]   = 0.82f;
+			parameters[(int)Parameter::TapDecay]  = 0.96f;
+
+			// Early diffusion: high stages, moderate delay, strong feedback for density
+			parameters[(int)Parameter::DiffusionEnabled]  = 1.0f;
+			parameters[(int)Parameter::DiffusionStages]   = 0.8571429f; // high, but not max to save CPU
+			parameters[(int)Parameter::DiffusionDelay]    = 0.52f;
+			parameters[(int)Parameter::DiffusionFeedback] = 0.74f;
+
+			// Late reverb: inharmonic timings, longer tail, no modulation
+			parameters[(int)Parameter::LineDelay] = 0.58f;
+			parameters[(int)Parameter::LineDecay] = 0.72f;
+
+			parameters[(int)Parameter::LateDiffusionEnabled]  = 1.0f;
+			parameters[(int)Parameter::LateDiffusionStages]   = 0.7142857f;
+			parameters[(int)Parameter::LateDiffusionDelay]    = 0.62f;
+			parameters[(int)Parameter::LateDiffusionFeedback] = 0.70f;
+
+			// Tone shaping: gentle shelves, airy but controlled
+			parameters[(int)Parameter::PostLowShelfGain]       = 0.85f;
+			parameters[(int)Parameter::PostLowShelfFrequency]  = 0.20f;
+			parameters[(int)Parameter::PostHighShelfGain]      = 0.78f;
+			parameters[(int)Parameter::PostHighShelfFrequency] = 0.58f;
+			parameters[(int)Parameter::PostCutoffFrequency]    = 0.78f;
+
+			// No modulation (natural, avoids seasickness)
+			parameters[(int)Parameter::EarlyDiffusionModAmount] = 0.0f;
+			parameters[(int)Parameter::EarlyDiffusionModRate]   = 0.0f;
+			parameters[(int)Parameter::LineModAmount]           = 0.0f;
+			parameters[(int)Parameter::LineModRate]             = 0.0f;
+			parameters[(int)Parameter::LateDiffusionModAmount]  = 0.0f;
+			parameters[(int)Parameter::LateDiffusionModRate]    = 0.0f;
+
+			// Seeds: chosen to decorrelate and reduce periodicity
+			parameters[(int)Parameter::TapSeed]          = 0.000421f;
+			parameters[(int)Parameter::DiffusionSeed]    = 0.000271f;
+			parameters[(int)Parameter::DelaySeed]        = 0.000389f;
+			parameters[(int)Parameter::PostDiffusionSeed]= 0.000451f;
+			parameters[(int)Parameter::CrossSeed]        = 0.90f;
+
+			// Output mix: balanced early and late
+			parameters[(int)Parameter::DryOut]      = 1.0f;
+			parameters[(int)Parameter::PredelayOut] = 0.0f;
+			parameters[(int)Parameter::EarlyOut]    = 0.72f;
+			parameters[(int)Parameter::MainOut]     = 0.88f;
+
+			// Filters and quality
+			parameters[(int)Parameter::HiPassEnabled]  = 1.0f;
+			parameters[(int)Parameter::LowPassEnabled] = 1.0f;
+			parameters[(int)Parameter::LowShelfEnabled]= 1.0f;
+			parameters[(int)Parameter::HighShelfEnabled]=1.0f;
+			parameters[(int)Parameter::CutoffEnabled]  = 1.0f;
+			parameters[(int)Parameter::LateStageTap]   = 1.0f;
+			parameters[(int)Parameter::Interpolation]  = 1.0f;
+
+			for (auto i = 0; i < (int)Parameter::Count; ++i)
+				SetParameter((Parameter)i, parameters[i]);
+		}
+
+		/**
+		 * B; Sounds metallic but good on pizz
+		 * Darker, larger hall with slower build/bloom, 3–5 s tail.
+		 * No modulation, longer lines, strong diffusion.
+		 */
+		void initGpt5WarmCathedral()
+		{
+			parameters[(int)Parameter::InputMix] = 0.0f;
+			parameters[(int)Parameter::PreDelay] = 0.018f; // ~18 ms
+			parameters[(int)Parameter::HighPass] = 0.05f;
+			parameters[(int)Parameter::LowPass]  = 0.62f;
+
+			parameters[(int)Parameter::TapCount]  = 0.55f;
+			parameters[(int)Parameter::TapLength] = 0.50f;
+			parameters[(int)Parameter::TapGain]   = 0.68f;
+			parameters[(int)Parameter::TapDecay]  = 0.98f;
+
+			parameters[(int)Parameter::DiffusionEnabled]  = 1.0f;
+			parameters[(int)Parameter::DiffusionStages]   = 0.8571429f;
+			parameters[(int)Parameter::DiffusionDelay]    = 0.60f;
+			parameters[(int)Parameter::DiffusionFeedback] = 0.78f;
+
+			parameters[(int)Parameter::LineDelay] = 0.72f;
+			parameters[(int)Parameter::LineDecay] = 0.80f;
+
+			parameters[(int)Parameter::LateDiffusionEnabled]  = 1.0f;
+			parameters[(int)Parameter::LateDiffusionStages]   = 0.8571429f;
+			parameters[(int)Parameter::LateDiffusionDelay]    = 0.68f;
+			parameters[(int)Parameter::LateDiffusionFeedback] = 0.74f;
+
+			parameters[(int)Parameter::PostLowShelfGain]       = 0.90f;
+			parameters[(int)Parameter::PostLowShelfFrequency]  = 0.18f;
+			parameters[(int)Parameter::PostHighShelfGain]      = 0.70f;
+			parameters[(int)Parameter::PostHighShelfFrequency] = 0.52f;
+			parameters[(int)Parameter::PostCutoffFrequency]    = 0.72f;
+
+			parameters[(int)Parameter::EarlyDiffusionModAmount] = 0.0f;
+			parameters[(int)Parameter::EarlyDiffusionModRate]   = 0.0f;
+			parameters[(int)Parameter::LineModAmount]           = 0.0f;
+			parameters[(int)Parameter::LineModRate]             = 0.0f;
+			parameters[(int)Parameter::LateDiffusionModAmount]  = 0.0f;
+			parameters[(int)Parameter::LateDiffusionModRate]    = 0.0f;
+
+			parameters[(int)Parameter::TapSeed]           = 0.000233f;
+			parameters[(int)Parameter::DiffusionSeed]     = 0.000407f;
+			parameters[(int)Parameter::DelaySeed]         = 0.000163f;
+			parameters[(int)Parameter::PostDiffusionSeed] = 0.000593f;
+			parameters[(int)Parameter::CrossSeed]         = 1.0f;
+
+			parameters[(int)Parameter::DryOut]      = 1.0f;
+			parameters[(int)Parameter::PredelayOut] = 0.0f;
+			parameters[(int)Parameter::EarlyOut]    = 0.60f;
+			parameters[(int)Parameter::MainOut]     = 0.90f;
+
+			parameters[(int)Parameter::HiPassEnabled]   = 1.0f;
+			parameters[(int)Parameter::LowPassEnabled]  = 1.0f;
+			parameters[(int)Parameter::LowShelfEnabled] = 1.0f;
+			parameters[(int)Parameter::HighShelfEnabled]= 1.0f;
+			parameters[(int)Parameter::CutoffEnabled]   = 1.0f;
+			parameters[(int)Parameter::LateStageTap]    = 1.0f;
+			parameters[(int)Parameter::Interpolation]   = 1.0f;
+
+			for (auto i = 0; i < (int)Parameter::Count; ++i)
+				SetParameter((Parameter)i, parameters[i]);
+		}
+
+		/**
+		 * 80% CPU with buffer under-runs
+		 * B; Lovely, natural
+		 * Airier and lighter, wide medium-large chamber.
+		 * Quicker decay, bright-ish without metallic zing.
+		 */
+		void initGpt5AiryWideChamber()
+		{
+			parameters[(int)Parameter::InputMix] = 0.0f;
+			parameters[(int)Parameter::PreDelay] = 0.008f; // ~8 ms
+			parameters[(int)Parameter::HighPass] = 0.12f;
+			parameters[(int)Parameter::LowPass]  = 0.80f;
+
+			parameters[(int)Parameter::TapCount]  = 0.70f;
+			parameters[(int)Parameter::TapLength] = 0.28f;
+			parameters[(int)Parameter::TapGain]   = 0.76f;
+			parameters[(int)Parameter::TapDecay]  = 0.94f;
+
+			parameters[(int)Parameter::DiffusionEnabled]  = 1.0f;
+			parameters[(int)Parameter::DiffusionStages]   = 0.7142857f;
+			parameters[(int)Parameter::DiffusionDelay]    = 0.36f;
+			parameters[(int)Parameter::DiffusionFeedback] = 0.68f;
+
+			parameters[(int)Parameter::LineDelay] = 0.40f;  // shorter, to stay lively without echoes
+			parameters[(int)Parameter::LineDecay] = 0.62f;  // ~2 s class tail
+
+			parameters[(int)Parameter::LateDiffusionEnabled]  = 1.0f;
+			parameters[(int)Parameter::LateDiffusionStages]   = 0.5714286f;
+			parameters[(int)Parameter::LateDiffusionDelay]    = 0.46f;
+			parameters[(int)Parameter::LateDiffusionFeedback] = 0.66f;
+
+			parameters[(int)Parameter::PostLowShelfGain]       = 0.80f;
+			parameters[(int)Parameter::PostLowShelfFrequency]  = 0.22f;
+			parameters[(int)Parameter::PostHighShelfGain]      = 0.88f;
+			parameters[(int)Parameter::PostHighShelfFrequency] = 0.58f;
+			parameters[(int)Parameter::PostCutoffFrequency]    = 0.82f;
+
+			parameters[(int)Parameter::EarlyDiffusionModAmount] = 0.0f;
+			parameters[(int)Parameter::EarlyDiffusionModRate]   = 0.0f;
+			parameters[(int)Parameter::LineModAmount]           = 0.0f;
+			parameters[(int)Parameter::LineModRate]             = 0.0f;
+			parameters[(int)Parameter::LateDiffusionModAmount]  = 0.0f;
+			parameters[(int)Parameter::LateDiffusionModRate]    = 0.0f;
+
+			parameters[(int)Parameter::TapSeed]           = 0.000129f;
+			parameters[(int)Parameter::DiffusionSeed]     = 0.000219f;
+			parameters[(int)Parameter::DelaySeed]         = 0.000191f;
+			parameters[(int)Parameter::PostDiffusionSeed] = 0.000102f;
+			parameters[(int)Parameter::CrossSeed]         = 0.75f;
+
+			parameters[(int)Parameter::DryOut]      = 1.0f;
+			parameters[(int)Parameter::PredelayOut] = 0.0f;
+			parameters[(int)Parameter::EarlyOut]    = 0.78f;
+			parameters[(int)Parameter::MainOut]     = 0.82f;
+
+			parameters[(int)Parameter::HiPassEnabled]   = 1.0f;
+			parameters[(int)Parameter::LowPassEnabled]  = 1.0f;
+			parameters[(int)Parameter::LowShelfEnabled] = 1.0f;
+			parameters[(int)Parameter::HighShelfEnabled]= 1.0f;
+			parameters[(int)Parameter::CutoffEnabled]   = 1.0f;
+			parameters[(int)Parameter::LateStageTap]    = 1.0f;
+			parameters[(int)Parameter::Interpolation]   = 1.0f;
+
+			for (auto i = 0; i < (int)Parameter::Count; ++i)
+				SetParameter((Parameter)i, parameters[i]);
+		}
+		
+		/**
+		 * Buffer under-runs
+		 * Long, dense ambient hall with randomized blooms/swells.
+		 * Low brightness, low mud, minimal periodicity, just enough modulation to break up modes.
+		 */
+        void initGpt5AmbientBloom()
+        {
+            // Input/tone
+            parameters[(int)Parameter::InputMix] = 0.0f;
+            parameters[(int)Parameter::PreDelay] = 0.014f;   // short, keeps it cohesive
+            parameters[(int)Parameter::HighPass] = 0.08f;    // tame rumble
+            parameters[(int)Parameter::LowPass]  = 0.72f;    // not too bright (~10–12 kHz)
+
+            // Early reflections: dense but smooth, seeds randomize spacing
+            parameters[(int)Parameter::TapCount]  = 0.72f;
+            parameters[(int)Parameter::TapLength] = 0.54f;   // ~270 ms window
+            parameters[(int)Parameter::TapGain]   = 0.78f;
+            parameters[(int)Parameter::TapDecay]  = 0.98f;
+
+            // Early diffusion: high stage count for quick, smooth build
+            parameters[(int)Parameter::DiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::DiffusionStages]   = 0.8571429f; // high but not max (CPU)
+            parameters[(int)Parameter::DiffusionDelay]    = 0.58f;
+            parameters[(int)Parameter::DiffusionFeedback] = 0.76f;
+
+            // Late field: long tail, inharmonic delay scaling to reduce periodicity
+            parameters[(int)Parameter::LineDelay] = 0.86f;   // longer base line times
+            parameters[(int)Parameter::LineDecay] = 0.82f;   // long decay, ambient class
+
+            // Late diffusion: more complexity and bloom
+            parameters[(int)Parameter::LateDiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::LateDiffusionStages]   = 0.7142857f;
+            parameters[(int)Parameter::LateDiffusionDelay]    = 0.66f;
+            parameters[(int)Parameter::LateDiffusionFeedback] = 0.74f;
+
+            // Post EQ: gentle low trim and soft top to stay clear but not dull
+            parameters[(int)Parameter::PostLowShelfGain]       = 0.82f;
+            parameters[(int)Parameter::PostLowShelfFrequency]  = 0.18f;
+            parameters[(int)Parameter::PostHighShelfGain]      = 0.76f;
+            parameters[(int)Parameter::PostHighShelfFrequency] = 0.56f;
+            parameters[(int)Parameter::PostCutoffFrequency]    = 0.74f;
+
+            // Minimal modulation to avoid seasick feel but break up modes
+            // Set these three amounts to 0.0f for a fully static version.
+            parameters[(int)Parameter::EarlyDiffusionModAmount] = 0.02f;
+            parameters[(int)Parameter::EarlyDiffusionModRate]   = 0.14f;
+            parameters[(int)Parameter::LineModAmount]           = 0.04f;
+            parameters[(int)Parameter::LineModRate]             = 0.12f;
+            parameters[(int)Parameter::LateDiffusionModAmount]  = 0.06f;
+            parameters[(int)Parameter::LateDiffusionModRate]    = 0.14f;
+
+            // Seeds: decorrelate structures to avoid periodic feedback
+            parameters[(int)Parameter::TapSeed]           = 0.000613f;
+            parameters[(int)Parameter::DiffusionSeed]     = 0.000457f;
+            parameters[(int)Parameter::DelaySeed]         = 0.000829f;
+            parameters[(int)Parameter::PostDiffusionSeed] = 0.000379f;
+            parameters[(int)Parameter::CrossSeed]         = 0.68f;
+
+            // Output balance: mostly late field; early kept lower for “bloomy” feel
+            parameters[(int)Parameter::DryOut]      = 0.92f;
+            parameters[(int)Parameter::PredelayOut] = 0.0f;
+            parameters[(int)Parameter::EarlyOut]    = 0.58f;
+            parameters[(int)Parameter::MainOut]     = 0.94f;
+
+            // Switches/quality
+            parameters[(int)Parameter::HiPassEnabled]   = 1.0f;
+            parameters[(int)Parameter::LowPassEnabled]  = 1.0f;
+            parameters[(int)Parameter::LowShelfEnabled] = 1.0f;
+            parameters[(int)Parameter::HighShelfEnabled]= 1.0f;
+            parameters[(int)Parameter::CutoffEnabled]   = 1.0f;
+            parameters[(int)Parameter::LateStageTap]    = 1.0f; // extra late taps contribute to swells
+            parameters[(int)Parameter::Interpolation]   = 1.0f;
+
+            for (auto i = 0; i < (int)Parameter::Count; ++i)
+                SetParameter((Parameter)i, parameters[i]);
+        }
+
+
+		/**
+		 * Three violin-friendly presets:
+		 * Controlled 2.5–4.5 kHz, Abbey Road-style HP/LP on the tail, subtle vibrato-speed modulation (~5–7 Hz).
+		 */
+
+        /**
+		 * Focused solo plate for violin: short PD, soft highs, controlled presence band.
+		 */
+        void initGpt5ViolinSoloPlate()
+        {
+            parameters[(int)Parameter::InputMix] = 0.0f;
+            parameters[(int)Parameter::PreDelay] = 0.020f;   // ~20 ms (Abbey Road)
+            parameters[(int)Parameter::HighPass] = 0.62f;    // ~500–700 Hz HPF on verb
+            parameters[(int)Parameter::LowPass]  = 0.76f;    // ~10–11 kHz LPF
+
+            parameters[(int)Parameter::TapCount]  = 0.60f;
+            parameters[(int)Parameter::TapLength] = 0.35f;
+            parameters[(int)Parameter::TapGain]   = 0.80f;
+            parameters[(int)Parameter::TapDecay]  = 0.95f;
+
+            parameters[(int)Parameter::DiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::DiffusionStages]   = 0.7142857f;
+            parameters[(int)Parameter::DiffusionDelay]    = 0.40f;
+            parameters[(int)Parameter::DiffusionFeedback] = 0.70f;
+
+            parameters[(int)Parameter::LineDelay] = 0.48f;
+            parameters[(int)Parameter::LineDecay] = 0.66f;
+
+            parameters[(int)Parameter::LateDiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::LateDiffusionStages]   = 0.5714286f;
+            parameters[(int)Parameter::LateDiffusionDelay]    = 0.55f;
+            parameters[(int)Parameter::LateDiffusionFeedback] = 0.68f;
+
+            // Tone: slightly dip upper presence via shelf/cutoff
+            parameters[(int)Parameter::PostLowShelfGain]       = 0.84f;
+            parameters[(int)Parameter::PostLowShelfFrequency]  = 0.20f;
+            parameters[(int)Parameter::PostHighShelfGain]      = 0.72f; // tame 2.5–4.5 kHz and above
+            parameters[(int)Parameter::PostHighShelfFrequency] = 0.54f;
+            parameters[(int)Parameter::PostCutoffFrequency]    = 0.76f;
+
+            // Subtle vibrato-speed modulation
+            parameters[(int)Parameter::EarlyDiffusionModAmount] = 0.06f;
+            parameters[(int)Parameter::EarlyDiffusionModRate]   = 0.92f; // ~5–7 Hz
+            parameters[(int)Parameter::LineModAmount]           = 0.08f;
+            parameters[(int)Parameter::LineModRate]             = 0.90f;
+            parameters[(int)Parameter::LateDiffusionModAmount]  = 0.06f;
+            parameters[(int)Parameter::LateDiffusionModRate]    = 0.94f;
+
+            parameters[(int)Parameter::TapSeed]           = 0.000511f;
+            parameters[(int)Parameter::DiffusionSeed]     = 0.000337f;
+            parameters[(int)Parameter::DelaySeed]         = 0.000627f;
+            parameters[(int)Parameter::PostDiffusionSeed] = 0.000439f;
+            parameters[(int)Parameter::CrossSeed]         = 0.60f;
+
+            parameters[(int)Parameter::DryOut]      = 1.0f;
+            parameters[(int)Parameter::PredelayOut] = 0.0f;
+            parameters[(int)Parameter::EarlyOut]    = 0.62f;
+            parameters[(int)Parameter::MainOut]     = 0.86f;
+
+            parameters[(int)Parameter::HiPassEnabled]   = 1.0f;
+            parameters[(int)Parameter::LowPassEnabled]  = 1.0f;
+            parameters[(int)Parameter::LowShelfEnabled] = 1.0f;
+            parameters[(int)Parameter::HighShelfEnabled]= 1.0f;
+            parameters[(int)Parameter::CutoffEnabled]   = 1.0f;
+            parameters[(int)Parameter::LateStageTap]    = 1.0f;
+            parameters[(int)Parameter::Interpolation]   = 1.0f;
+
+            for (auto i = 0; i < (int)Parameter::Count; ++i)
+                SetParameter((Parameter)i, parameters[i]);
+        }
+
+        /**
+		 * Lots of buffer-underuns
+		 * Lively chamber: quick decay, articulation-friendly, low mix footprint.
+		 */
+        void initGpt5ViolinChamber()
+        {
+            parameters[(int)Parameter::InputMix] = 0.0f;
+            parameters[(int)Parameter::PreDelay] = 0.012f;   // ~12 ms
+            parameters[(int)Parameter::HighPass] = 0.58f;    // ~450–650 Hz
+            parameters[(int)Parameter::LowPass]  = 0.80f;    // slightly airier cap
+
+            parameters[(int)Parameter::TapCount]  = 0.55f;
+            parameters[(int)Parameter::TapLength] = 0.28f;
+            parameters[(int)Parameter::TapGain]   = 0.70f;
+            parameters[(int)Parameter::TapDecay]  = 0.94f;
+
+            parameters[(int)Parameter::DiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::DiffusionStages]   = 0.5714286f;
+            parameters[(int)Parameter::DiffusionDelay]    = 0.32f;
+            parameters[(int)Parameter::DiffusionFeedback] = 0.66f;
+
+            parameters[(int)Parameter::LineDelay] = 0.38f;
+            parameters[(int)Parameter::LineDecay] = 0.58f;
+
+            parameters[(int)Parameter::LateDiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::LateDiffusionStages]   = 0.5714286f;
+            parameters[(int)Parameter::LateDiffusionDelay]    = 0.44f;
+            parameters[(int)Parameter::LateDiffusionFeedback] = 0.62f;
+
+            // Tone shaping for smooth bow noise and low presence
+            parameters[(int)Parameter::PostLowShelfGain]       = 0.80f;
+            parameters[(int)Parameter::PostLowShelfFrequency]  = 0.22f;
+            parameters[(int)Parameter::PostHighShelfGain]      = 0.74f;
+            parameters[(int)Parameter::PostHighShelfFrequency] = 0.56f;
+            parameters[(int)Parameter::PostCutoffFrequency]    = 0.80f;
+
+            // Subtle vibrato-speed modulation
+            parameters[(int)Parameter::EarlyDiffusionModAmount] = 0.05f;
+            parameters[(int)Parameter::EarlyDiffusionModRate]   = 0.90f;
+            parameters[(int)Parameter::LineModAmount]           = 0.06f;
+            parameters[(int)Parameter::LineModRate]             = 0.88f;
+            parameters[(int)Parameter::LateDiffusionModAmount]  = 0.05f;
+            parameters[(int)Parameter::LateDiffusionModRate]    = 0.92f;
+
+            parameters[(int)Parameter::TapSeed]           = 0.000233f;
+            parameters[(int)Parameter::DiffusionSeed]     = 0.000407f;
+            parameters[(int)Parameter::DelaySeed]         = 0.000163f;
+            parameters[(int)Parameter::PostDiffusionSeed] = 0.000593f;
+            parameters[(int)Parameter::CrossSeed]         = 0.50f;
+
+            parameters[(int)Parameter::DryOut]      = 1.0f;
+            parameters[(int)Parameter::PredelayOut] = 0.0f;
+            parameters[(int)Parameter::EarlyOut]    = 0.70f;
+            parameters[(int)Parameter::MainOut]     = 0.78f;
+
+            parameters[(int)Parameter::HiPassEnabled]   = 1.0f;
+            parameters[(int)Parameter::LowPassEnabled]  = 1.0f;
+            parameters[(int)Parameter::LowShelfEnabled] = 1.0f;
+            parameters[(int)Parameter::HighShelfEnabled]= 1.0f;
+            parameters[(int)Parameter::CutoffEnabled]   = 1.0f;
+            parameters[(int)Parameter::LateStageTap]    = 1.0f;
+            parameters[(int)Parameter::Interpolation]   = 1.0f;
+
+            for (auto i = 0; i < (int)Parameter::Count; ++i)
+                SetParameter((Parameter)i, parameters[i]);
+        }
+
+        /**
+		 * Disgusting harsh mess.
+		 * Wide concert hall: lush but mix-safe, long tail, gentle presence dip.
+		 */
+        void initGpt5ViolinHallWide()
+        {
+            parameters[(int)Parameter::InputMix] = 0.0f;
+            parameters[(int)Parameter::PreDelay] = 0.024f;   // ~24 ms (Abbey Road)
+            parameters[(int)Parameter::HighPass] = 0.66f;    // ~600–800 Hz
+            parameters[(int)Parameter::LowPass]  = 0.72f;    // ~9–10 kHz
+
+            parameters[(int)Parameter::TapCount]  = 0.70f;
+            parameters[(int)Parameter::TapLength] = 0.50f;
+            parameters[(int)Parameter::TapGain]   = 0.76f;
+            parameters[(int)Parameter::TapDecay]  = 0.98f;
+
+            parameters[(int)Parameter::DiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::DiffusionStages]   = 0.8571429f;
+            parameters[(int)Parameter::DiffusionDelay]    = 0.58f;
+            parameters[(int)Parameter::DiffusionFeedback] = 0.76f;
+
+            parameters[(int)Parameter::LineDelay] = 0.68f;
+            parameters[(int)Parameter::LineDecay] = 0.78f;   // long but stable
+
+            parameters[(int)Parameter::LateDiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::LateDiffusionStages]   = 0.7142857f;
+            parameters[(int)Parameter::LateDiffusionDelay]    = 0.62f;
+            parameters[(int)Parameter::LateDiffusionFeedback] = 0.74f;
+
+            // Tone: darker top, reduced 2.5–4.5 kHz feel
+            parameters[(int)Parameter::PostLowShelfGain]       = 0.84f;
+            parameters[(int)Parameter::PostLowShelfFrequency]  = 0.18f;
+            parameters[(int)Parameter::PostHighShelfGain]      = 0.70f;
+            parameters[(int)Parameter::PostHighShelfFrequency] = 0.54f;
+            parameters[(int)Parameter::PostCutoffFrequency]    = 0.74f;
+
+            // Subtle vibrato-speed modulation
+            parameters[(int)Parameter::EarlyDiffusionModAmount] = 0.07f;
+            parameters[(int)Parameter::EarlyDiffusionModRate]   = 0.92f;
+            parameters[(int)Parameter::LineModAmount]           = 0.09f;
+            parameters[(int)Parameter::LineModRate]             = 0.90f;
+            parameters[(int)Parameter::LateDiffusionModAmount]  = 0.07f;
+            parameters[(int)Parameter::LateDiffusionModRate]    = 0.94f;
+
+            parameters[(int)Parameter::TapSeed]           = 0.000613f;
+            parameters[(int)Parameter::DiffusionSeed]     = 0.000457f;
+            parameters[(int)Parameter::DelaySeed]         = 0.000829f;
+            parameters[(int)Parameter::PostDiffusionSeed] = 0.000379f;
+            parameters[(int)Parameter::CrossSeed]         = 0.68f;
+
+            parameters[(int)Parameter::DryOut]      = 1.0f;
+            parameters[(int)Parameter::PredelayOut] = 0.0f;
+            parameters[(int)Parameter::EarlyOut]    = 0.55f;
+            parameters[(int)Parameter::MainOut]     = 0.92f;
+
+            parameters[(int)Parameter::HiPassEnabled]   = 1.0f;
+            parameters[(int)Parameter::LowPassEnabled]  = 1.0f;
+            parameters[(int)Parameter::LowShelfEnabled] = 1.0f;
+            parameters[(int)Parameter::HighShelfEnabled]= 1.0f;
+            parameters[(int)Parameter::CutoffEnabled]   = 1.0f;
+            parameters[(int)Parameter::LateStageTap]    = 1.0f;
+            parameters[(int)Parameter::Interpolation]   = 1.0f;
+
+            for (auto i = 0; i < (int)Parameter::Count; ++i)
+                SetParameter((Parameter)i, parameters[i]);
+        }
+
+		
+		/**
+		 * Here are three fresh presets that explore new territory.
+		 * They’re voiced to avoid the existing factory vibes and to add unique textures.
+		 */
+
+        /**
+		 * Harsh!
+		 * Dense "granular bloom" cloud.  Lots of randomized early taps into a smooth tail, subtly gritty (interp off)
+		 */
+        void initGpt5GrainBloomCloud()
+        {
+            parameters[(int)Parameter::InputMix] = 0.0f;
+            parameters[(int)Parameter::PreDelay] = 0.016f;
+            parameters[(int)Parameter::HighPass] = 0.10f;
+            parameters[(int)Parameter::LowPass]  = 0.78f;
+
+            parameters[(int)Parameter::TapCount]  = 0.82f; // many grains
+            parameters[(int)Parameter::TapLength] = 0.82f; // ~410 ms spread
+            parameters[(int)Parameter::TapGain]   = 0.58f;
+            parameters[(int)Parameter::TapDecay]  = 0.98f;
+
+            parameters[(int)Parameter::DiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::DiffusionStages]   = 0.7142857f;
+            parameters[(int)Parameter::DiffusionDelay]    = 0.48f;
+            parameters[(int)Parameter::DiffusionFeedback] = 0.74f;
+
+            parameters[(int)Parameter::LineDelay] = 0.46f;
+            parameters[(int)Parameter::LineDecay] = 0.76f;
+
+            parameters[(int)Parameter::LateDiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::LateDiffusionStages]   = 0.5714286f;
+            parameters[(int)Parameter::LateDiffusionDelay]    = 0.60f;
+            parameters[(int)Parameter::LateDiffusionFeedback] = 0.72f;
+
+            parameters[(int)Parameter::PostLowShelfGain]       = 0.84f;
+            parameters[(int)Parameter::PostLowShelfFrequency]  = 0.20f;
+            parameters[(int)Parameter::PostHighShelfGain]      = 0.80f;
+            parameters[(int)Parameter::PostHighShelfFrequency] = 0.58f;
+            parameters[(int)Parameter::PostCutoffFrequency]    = 0.78f;
+
+            // tiny motion only to de-mode; set to 0 for fully static
+            parameters[(int)Parameter::EarlyDiffusionModAmount] = 0.03f;
+            parameters[(int)Parameter::EarlyDiffusionModRate]   = 0.18f;
+            parameters[(int)Parameter::LineModAmount]           = 0.04f;
+            parameters[(int)Parameter::LineModRate]             = 0.16f;
+            parameters[(int)Parameter::LateDiffusionModAmount]  = 0.05f;
+            parameters[(int)Parameter::LateDiffusionModRate]    = 0.18f;
+
+            parameters[(int)Parameter::TapSeed]           = 0.000731f;
+            parameters[(int)Parameter::DiffusionSeed]     = 0.000523f;
+            parameters[(int)Parameter::DelaySeed]         = 0.000947f;
+            parameters[(int)Parameter::PostDiffusionSeed] = 0.000311f;
+            parameters[(int)Parameter::CrossSeed]         = 0.33f;
+
+            parameters[(int)Parameter::DryOut]      = 1.0f;
+            parameters[(int)Parameter::PredelayOut] = 0.0f;
+            parameters[(int)Parameter::EarlyOut]    = 0.68f;
+            parameters[(int)Parameter::MainOut]     = 0.92f;
+
+            parameters[(int)Parameter::HiPassEnabled]   = 1.0f;
+            parameters[(int)Parameter::LowPassEnabled]  = 1.0f;
+            parameters[(int)Parameter::LowShelfEnabled] = 1.0f;
+            parameters[(int)Parameter::HighShelfEnabled]= 1.0f;
+            parameters[(int)Parameter::CutoffEnabled]   = 1.0f;
+            parameters[(int)Parameter::LateStageTap]    = 1.0f;
+            parameters[(int)Parameter::Interpolation]   = 0.0f; // adds a slight particulate texture
+
+            for (auto i = 0; i < (int)Parameter::Count; ++i)
+                SetParameter((Parameter)i, parameters[i]);
+        }
+
+        /**
+		 * 60% CPU
+		 * B; Super nice
+		 * Near-infinite, mix-safe pad.  Very long sustain without buildup
+		 * Dark-airy band, heavy late diffusion.
+		 */
+        void initGpt5NearInfinitePad()
+        {
+            parameters[(int)Parameter::InputMix] = 0.0f;
+            parameters[(int)Parameter::PreDelay] = 0.004f;
+            parameters[(int)Parameter::HighPass] = 0.22f; // clears mud
+            parameters[(int)Parameter::LowPass]  = 0.66f; // darker top
+
+            parameters[(int)Parameter::TapCount]  = 0.25f; // fewer, softer early cues
+            parameters[(int)Parameter::TapLength] = 0.60f;
+            parameters[(int)Parameter::TapGain]   = 0.40f;
+            parameters[(int)Parameter::TapDecay]  = 0.96f;
+
+            parameters[(int)Parameter::DiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::DiffusionStages]   = 0.8571429f;
+            parameters[(int)Parameter::DiffusionDelay]    = 0.62f;
+            parameters[(int)Parameter::DiffusionFeedback] = 0.80f;
+
+            parameters[(int)Parameter::LineDelay] = 0.74f;
+            parameters[(int)Parameter::LineDecay] = 0.92f; // near-infinite
+
+            parameters[(int)Parameter::LateDiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::LateDiffusionStages]   = 0.7142857f;
+            parameters[(int)Parameter::LateDiffusionDelay]    = 0.68f;
+            parameters[(int)Parameter::LateDiffusionFeedback] = 0.78f;
+
+            parameters[(int)Parameter::PostLowShelfGain]       = 0.86f;
+            parameters[(int)Parameter::PostLowShelfFrequency]  = 0.16f;
+            parameters[(int)Parameter::PostHighShelfGain]      = 0.70f;
+            parameters[(int)Parameter::PostHighShelfFrequency] = 0.50f;
+            parameters[(int)Parameter::PostCutoffFrequency]    = 0.70f;
+
+            // barely-there drift to avoid ringing
+            parameters[(int)Parameter::EarlyDiffusionModAmount] = 0.02f;
+            parameters[(int)Parameter::EarlyDiffusionModRate]   = 0.10f;
+            parameters[(int)Parameter::LineModAmount]           = 0.03f;
+            parameters[(int)Parameter::LineModRate]             = 0.08f;
+            parameters[(int)Parameter::LateDiffusionModAmount]  = 0.02f;
+            parameters[(int)Parameter::LateDiffusionModRate]    = 0.12f;
+
+            parameters[(int)Parameter::TapSeed]           = 0.000887f;
+            parameters[(int)Parameter::DiffusionSeed]     = 0.000643f;
+            parameters[(int)Parameter::DelaySeed]         = 0.000973f;
+            parameters[(int)Parameter::PostDiffusionSeed] = 0.000537f;
+            parameters[(int)Parameter::CrossSeed]         = 0.90f;
+
+            parameters[(int)Parameter::DryOut]      = 1.0f;
+            parameters[(int)Parameter::PredelayOut] = 0.0f;
+            parameters[(int)Parameter::EarlyOut]    = 0.42f;
+            parameters[(int)Parameter::MainOut]     = 0.97f;
+
+            parameters[(int)Parameter::HiPassEnabled]   = 1.0f;
+            parameters[(int)Parameter::LowPassEnabled]  = 1.0f;
+            parameters[(int)Parameter::LowShelfEnabled] = 1.0f;
+            parameters[(int)Parameter::HighShelfEnabled]= 1.0f;
+            parameters[(int)Parameter::CutoffEnabled]   = 1.0f;
+            parameters[(int)Parameter::LateStageTap]    = 1.0f;
+            parameters[(int)Parameter::Interpolation]   = 1.0f;
+
+            for (auto i = 0; i < (int)Parameter::Count; ++i)
+                SetParameter((Parameter)i, parameters[i]);
+        }
+
+        /**
+		 * B; dull but slightly odd
+		 * Mid-band gated room.  Punchy early field, band-passed tail, minimal late taps for a “gate-like” stop.
+		 */
+        void initGpt5GhostGateMidband()
+        {
+            parameters[(int)Parameter::InputMix] = 0.0f;
+            parameters[(int)Parameter::PreDelay] = 0.030f;
+            parameters[(int)Parameter::HighPass] = 0.72f; // pushes verb out of low end
+            parameters[(int)Parameter::LowPass]  = 0.58f; // trims fizz
+
+            parameters[(int)Parameter::TapCount]  = 0.62f;
+            parameters[(int)Parameter::TapLength] = 0.22f; // tight early window
+            parameters[(int)Parameter::TapGain]   = 0.90f;
+            parameters[(int)Parameter::TapDecay]  = 0.90f;
+
+            parameters[(int)Parameter::DiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::DiffusionStages]   = 0.5714286f;
+            parameters[(int)Parameter::DiffusionDelay]    = 0.28f;
+            parameters[(int)Parameter::DiffusionFeedback] = 0.66f;
+
+            parameters[(int)Parameter::LineDelay] = 0.32f;
+            parameters[(int)Parameter::LineDecay] = 0.44f; // short-ish tail
+
+            parameters[(int)Parameter::LateDiffusionEnabled]  = 1.0f;
+            parameters[(int)Parameter::LateDiffusionStages]   = 0.10f; // minimal smoothing
+            parameters[(int)Parameter::LateDiffusionDelay]    = 0.24f;
+            parameters[(int)Parameter::LateDiffusionFeedback] = 0.60f;
+
+            parameters[(int)Parameter::PostLowShelfGain]       = 0.80f;
+            parameters[(int)Parameter::PostLowShelfFrequency]  = 0.25f;
+            parameters[(int)Parameter::PostHighShelfGain]      = 0.76f;
+            parameters[(int)Parameter::PostHighShelfFrequency] = 0.52f;
+            parameters[(int)Parameter::PostCutoffFrequency]    = 0.62f;
+
+            // static to keep the “gate” feel crisp
+            parameters[(int)Parameter::EarlyDiffusionModAmount] = 0.0f;
+            parameters[(int)Parameter::EarlyDiffusionModRate]   = 0.0f;
+            parameters[(int)Parameter::LineModAmount]           = 0.0f;
+            parameters[(int)Parameter::LineModRate]             = 0.0f;
+            parameters[(int)Parameter::LateDiffusionModAmount]  = 0.0f;
+            parameters[(int)Parameter::LateDiffusionModRate]    = 0.0f;
+
+            parameters[(int)Parameter::TapSeed]           = 0.000271f;
+            parameters[(int)Parameter::DiffusionSeed]     = 0.000803f;
+            parameters[(int)Parameter::DelaySeed]         = 0.000359f;
+            parameters[(int)Parameter::PostDiffusionSeed] = 0.000691f;
+            parameters[(int)Parameter::CrossSeed]         = 0.20f;
+
+            parameters[(int)Parameter::DryOut]      = 1.0f;
+            parameters[(int)Parameter::PredelayOut] = 0.0f;
+            parameters[(int)Parameter::EarlyOut]    = 0.92f;
+            parameters[(int)Parameter::MainOut]     = 0.60f;
+
+            parameters[(int)Parameter::HiPassEnabled]   = 1.0f;
+            parameters[(int)Parameter::LowPassEnabled]  = 1.0f;
+            parameters[(int)Parameter::LowShelfEnabled] = 0.0f;
+            parameters[(int)Parameter::HighShelfEnabled]= 1.0f;
+            parameters[(int)Parameter::CutoffEnabled]   = 1.0f;
+            parameters[(int)Parameter::LateStageTap]    = 0.0f; // fast stop, less bloom
+            parameters[(int)Parameter::Interpolation]   = 1.0f;
+
+            for (auto i = 0; i < (int)Parameter::Count; ++i)
+                SetParameter((Parameter)i, parameters[i]);
+        }
+
 
 		int GetSamplerate()
 		{
