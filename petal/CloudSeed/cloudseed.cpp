@@ -38,8 +38,8 @@ constexpr float PARAM_EPS = 0.002f;
 constexpr int CONTROL_UPDATE_BLOCKS = 4;
 
 // For fade outs of controls when bypass pressed
-constexpr int EARLY_BYPASS_BLOCKS = 500 / CONTROL_UPDATE_BLOCKS;  // 5ms when 48000hz Fs and 48 block size
-constexpr int LATE_BYPASS_BLOCKS = 2000 / CONTROL_UPDATE_BLOCKS;
+constexpr int EARLY_BYPASS_BLOCKS = 500 / CONTROL_UPDATE_BLOCKS;  // 500ms when 48000hz Fs and 48 block size
+constexpr int LATE_BYPASS_BLOCKS = 12000 / CONTROL_UPDATE_BLOCKS;
 
 
 daisy::CpuLoadMeter cpu_meter;
@@ -138,21 +138,22 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
         if (bypassing) {
             if (--earlyBypassCountdown <= 0 && earlyBypassCountdown > 0 - EARLY_BYPASS_BLOCKS) {
                 float earlyReduxFactor = 1.0f - ((float)abs(earlyBypassCountdown) / (float)EARLY_BYPASS_BLOCKS);
-                earlyValue = earlyValue * earlyReduxFactor;     
+                earlyValue *= earlyReduxFactor;     
             }
             else if (earlyBypassCountdown <= 0 - EARLY_BYPASS_BLOCKS) {
                 earlyValue = 0;
 
-                if (--lateBypassCountdown <= 0 && lateBypassCountdown >= 0 - LATE_BYPASS_BLOCKS) {
-                    float lateReduxFactor = 1.0f - ((float)abs(lateBypassCountdown) / (float)LATE_BYPASS_BLOCKS);
+                if (--lateBypassCountdown > 0) {
+                    float lateReduxFactor = (float)lateBypassCountdown / (float)LATE_BYPASS_BLOCKS;
                     // lateValue = lateValue * lateReduxFactor;
-                    // tapDecayValue = tapDecayValue * lateReduxFactor;
-                    timeValue = timeValue * lateReduxFactor;
+                    tapDecayValue *= lateReduxFactor;
+                    timeValue *= lateReduxFactor;
                 }
-                else if (lateBypassCountdown < 0 - LATE_BYPASS_BLOCKS) {
-                    /*lateValue = tapDecayValue =*/ timeValue = 0;
+                else {
+                    lateValue = tapDecayValue = timeValue = 0;
                     bypassing = false;
                     bypassed = true;
+                    reverb->ClearBuffers();
                 }
             }
         }
