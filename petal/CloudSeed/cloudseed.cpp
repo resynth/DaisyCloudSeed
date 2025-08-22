@@ -26,7 +26,8 @@ using namespace terrarium;  // This is important for mapping the correct control
 DaisyPetal hw;
 ::daisy::Parameter dry, earlyOut, lateOut, time, diffusion, tapDecay;
 
-bool bypass;
+bool bypassing;
+bool bypassed;
 bool pendingBypass;
 int c;
 Led led1, led2;
@@ -35,6 +36,10 @@ Led led1, led2;
 constexpr float PARAM_EPS = 0.002f;
 // update analog controls every N audio blocks to reduce audio-thread work
 constexpr int CONTROL_UPDATE_BLOCKS = 4;
+
+// For fade outs of controls when bypass pressed
+constexpr int EARLY_BYPASS_BLOCKS = 500 / CONTROL_UPDATE_BLOCKS;  // 5ms when 48000hz Fs and 48 block size
+constexpr int LATE_BYPASS_BLOCKS = 2000 / CONTROL_UPDATE_BLOCKS;
 
 
 daisy::CpuLoadMeter cpu_meter;
@@ -104,44 +109,75 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     led1.Update();
     led2.Update();
 
-    // Downsample analog control reads to reduce ADC work and avoid
-    // calling SetParameter unnecessarily every audio block.
+    static int earlyBypassCountdown = EARLY_BYPASS_BLOCKS;
+    static int lateBypassCountdown = LATE_BYPASS_BLOCKS;
+
     static int control_block_ctr = 0;
-    static float dryValue = 0.0f, earlyValue = 0.0f, mainValue = 0.0f,
+    static float dryValue = 0.0f, earlyValue = 0.0f, lateValue = 0.0f,
                  timeValue = 0.0f, diffusionValue = 0.0f, tapDecayValue = 0.0f;
     static float prevEarlyOut, prevLateOut, prevTime, prevDiffusion, prevTapDecay;
     static int prevNumLines;
 
-    if (--control_block_ctr <= 0)
+    // Downsample analog control reads to reduce ADC work and avoid calling SetParameter unnecessarily.
+    if (--control_block_ctr <= 0 && !bypassed)
     {
         control_block_ctr = CONTROL_UPDATE_BLOCKS;
+
         hw.ProcessAnalogControls();
         dryValue       = dry.Process();
-        earlyValue     = earlyOut.Process();
-        mainValue      = lateOut.Process();
-        timeValue      = time.Process();
-        diffusionValue = diffusion.Process();
-        tapDecayValue       = tapDecay.Process();
 
-        if (fabsf(prevEarlyOut - earlyValue) > PARAM_EPS) {
-            reverb->SetParameter(::Parameter::EarlyOut, earlyValue);
-            prevEarlyOut = earlyValue;
+        if (!bypassed) {
+            earlyValue     = earlyOut.Process();
+            lateValue      = lateOut.Process();
+            timeValue      = time.Process();
+            diffusionValue = diffusion.Process();
+            tapDecayValue       = tapDecay.Process();
         }
-        if (fabsf(prevLateOut - mainValue) > PARAM_EPS) {
-            reverb->SetParameter(::Parameter::MainOut, mainValue);
-            prevLateOut = mainValue;
+
+        // When bypassing allow trails then fade everything off before we stop processing reverb
+        if (bypassing) {
+            if (--earlyBypassCountdown <= 0 && earlyBypassCountdown > 0 - EARLY_BYPASS_BLOCKS) {
+                float earlyReduxFactor = 1.0f - ((float)abs(earlyBypassCountdown) / (float)EARLY_BYPASS_BLOCKS);
+                earlyValue = earlyValue * earlyReduxFactor;     
+            }
+            else if (earlyBypassCountdown <= 0 - EARLY_BYPASS_BLOCKS) {
+                earlyValue = 0;
+
+                if (--lateBypassCountdown <= 0 && lateBypassCountdown >= 0 - LATE_BYPASS_BLOCKS) {
+                    float lateReduxFactor = 1.0f - ((float)abs(lateBypassCountdown) / (float)LATE_BYPASS_BLOCKS);
+                    // lateValue = lateValue * lateReduxFactor;
+                    // tapDecayValue = tapDecayValue * lateReduxFactor;
+                    timeValue = timeValue * lateReduxFactor;
+                }
+                else if (lateBypassCountdown < 0 - LATE_BYPASS_BLOCKS) {
+                    /*lateValue = tapDecayValue =*/ timeValue = 0;
+                    bypassing = false;
+                    bypassed = true;
+                }
+            }
         }
-        if (fabsf(prevTime - timeValue) > PARAM_EPS) {
-            reverb->SetParameter(::Parameter::LineDecay, timeValue);
-            prevTime = timeValue;
-        }
-        if (fabsf(prevDiffusion - diffusionValue) > PARAM_EPS) {
-            reverb->SetParameter(::Parameter::LateDiffusionFeedback, diffusionValue);
-            prevDiffusion = diffusionValue;
-        }
-        if (fabsf(prevTapDecay - tapDecayValue) > PARAM_EPS) {
-            reverb->SetParameter(::Parameter::TapDecay, tapDecayValue);
-            prevTapDecay = tapDecayValue;
+
+        if (!bypassed) {
+            if (fabsf(prevEarlyOut - earlyValue) > PARAM_EPS) {
+                reverb->SetParameter(::Parameter::EarlyOut, earlyValue);
+                prevEarlyOut = earlyValue;
+            }
+            if (fabsf(prevLateOut - lateValue) > PARAM_EPS) {
+                reverb->SetParameter(::Parameter::MainOut, lateValue);
+                prevLateOut = lateValue;
+            }
+            if (fabsf(prevTime - timeValue) > PARAM_EPS) {
+                reverb->SetParameter(::Parameter::LineDecay, timeValue);
+                prevTime = timeValue;
+            }
+            if (fabsf(prevDiffusion - diffusionValue) > PARAM_EPS) {
+                reverb->SetParameter(::Parameter::LateDiffusionFeedback, diffusionValue);
+                prevDiffusion = diffusionValue;
+            }
+            if (fabsf(prevTapDecay - tapDecayValue) > PARAM_EPS) {
+                reverb->SetParameter(::Parameter::TapDecay, tapDecayValue);
+                prevTapDecay = tapDecayValue;
+            }
         }
     }
 
@@ -178,27 +214,41 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     
     // (De-)Activate bypass and toggle LED when left footswitch is pressed
     if (hw.switches[Terrarium::FOOTSWITCH_1].RisingEdge()) {
-
-        bypass = !bypass;
-        led1.Set(bypass ? 0.0f : 1.0f);
+        if (bypassing || bypassed) {
+            bypassing = bypassed = false;
+            led1.Set(true);
+            earlyBypassCountdown = EARLY_BYPASS_BLOCKS;
+            lateBypassCountdown = LATE_BYPASS_BLOCKS;
+        }
+        else {
+            bypassing = true;
+            led1.Set(false);
+        }
     }
     
-    if (!bypass) {
-        for (size_t i = 0; i < size; i++) {
-            reverbIn[i] = in[0][i];
-        }
-    }    
-    else {
+    if (bypassing) {
         for (size_t i = 0; i < size; i++) {
             reverbIn[i] = 0;
         }
+    }    
+    else if (!bypassed) {
+        for (size_t i = 0; i < size; i++) {
+            reverbIn[i] = in[0][i];
+        }
     }
-        
-    reverb->Process(reverbIn, reverbOut, 48);
+    
+    if (!bypassed) {
+        reverb->Process(reverbIn, reverbOut, 48);
+        for (size_t i = 0; i < size; i++) {  
+            out[0][i] = (in[0][i] * dryValue) + reverbOut[i];
+        }
+    }
+    else {
+        for (size_t i = 0; i < size; i++) {  
+            out[0][i] = in[0][i];
+        }
+    }
 
-    for (size_t i = 0; i < size; i++) {  
-        out[0][i] = (in[0][i] * dryValue) + reverbOut[i];
-    }
 
     // Notify CpuLoadMeter of block end
     cpu_meter.OnBlockEnd();
@@ -222,7 +272,7 @@ int main(void)
     reverb = new CloudSeed::ReverbController(samplerate);
     reverb->ClearBuffers();
 
-    bypass = true;
+    bypassed = true;
 
     dry.Init(hw.knob[Terrarium::KNOB_1], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     earlyOut.Init(hw.knob[Terrarium::KNOB_2], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
