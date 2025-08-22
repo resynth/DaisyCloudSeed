@@ -58,36 +58,32 @@ void* custom_pool_allocate(size_t size)
 }
 
 
+static inline void applyPreset(int idx)
+{
+    switch (idx)
+    {
+        case 0: reverb->initFactorySmallRoom(); break;
+        case 1: reverb->initGpt5AiryWideChamber(); break;
+        case 2: reverb->initFactoryMediumSpace(); break;
+        case 3: reverb->initFactoryNoiseInTheHallway(); break;
+        case 4: reverb->initFactoryDullEchos(); break;
+        case 5: reverb->initFactoryHyperplane(); break;
+        case 6: reverb->initFactoryChorus(); break;
+        case 7: reverb->initFactoryRubiKaFields(); break;
+        case 8: reverb->initGpt5NearInfinitePad(); break;
+        default: break;
+    }
+}
+
 void cyclePreset()
 {
     c += 1;
-    if ( c > 7 ) {
+    if (c > 8) {
         c = 0;
     }
 
     reverb->ClearBuffers();
-        
-    if ( c == 0 ) {
-            reverb->initFactoryChorus();
-    } else if ( c == 1 ) {
-            reverb->initFactoryDullEchos();
-    } else if ( c == 2 ) {
-            reverb->initFactoryHyperplane();
-    } else if ( c == 3 ) {
-            reverb->initFactoryMediumSpace();
-    } else if ( c == 4 ) {
-            reverb->initFactoryNoiseInTheHallway();
-    } else if ( c == 5 ) {
-            reverb->initFactoryRubiKaFields();
-    } else if ( c == 6 ) {
-            reverb->initFactorySmallRoom();
-    } else if ( c == 7 ) {
-            reverb->initFactory90sAreBack();
-    //} else if ( c == 8 ) {
-    //        reverb->initFactoryThroughTheLookingGlass(); // Only preset that sounds scratchy (using 4-5 delay lines, mono) causes buffer underruns
-    //                                                       //   TODO Try slight modifications to this preset to allow to work
-    }
-
+    applyPreset(c);
 }
 
 
