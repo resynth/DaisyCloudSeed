@@ -50,7 +50,7 @@ namespace CloudSeed
 		}
 
 		/**
-		 * 60%
+		 * 50%
 		 * Late early reflections, lovely long ambience.
 		 * Medium diffusion, nice modulation.
 		 */
@@ -113,7 +113,7 @@ namespace CloudSeed
 		}
 
 		/**
-		 * 40% CPU
+		 * 30% CPU
 		 * Late diffusion off, short lines, reads echoey and sparse.
 		 * Bit too much deep slow pitch modulation, might be nice if sped up a little.
 		 */
@@ -176,7 +176,7 @@ namespace CloudSeed
 		}
 
 		/**
-		 * 80% CPU
+		 * 70% CPU
 		 * Bright, tight early reflections, lots of lines and shelves. 
 		 * Modulation rates/amounts can feel seasick.
 		 */
@@ -239,7 +239,7 @@ namespace CloudSeed
 		}
 
 		/**
-		 * 80% CPU, clix
+		 * 70% CPU, clix
 		 * B; Nice but buffer under-runs
 		 * Balanced, nice slight darkness, higher early/late diffusion, moderate line decay.
 		 */
@@ -302,7 +302,7 @@ namespace CloudSeed
 		}
 
 		/**
-		 * 80% CPU
+		 * 70% CPU
 		 * Gritty, sparse taps, no modulation, late stages low/off, gritty static vibe.
 		 */
 		void initFactoryNoiseInTheHallway()
@@ -364,7 +364,7 @@ namespace CloudSeed
 		}
 
 		/**
-		 * 80% CPU
+		 * 70% CPU
 		 * Big, smooth field.  Diffuse, long lines, late taps.
 		 * Early reflections: full 500ms tap window with diffusion and feedback, keep earlyOut low so they just feed the network.
 		 * Light modulation in early lines, stronger in later lines to de-ring but avoids chorus.
@@ -430,7 +430,7 @@ namespace CloudSeed
 		}
 
 		/**
-		 * 60% CPU
+		 * 50% CPU
 		 */
 		void initFactorySmallRoom()
 		{
@@ -955,7 +955,7 @@ namespace CloudSeed
 		}
 
 		/**
-		 * 80% CPU with buffer under-runs
+		 * 70% CPU
 		 * B; Lovely, natural
 		 * Airier and lighter, wide medium-large chamber.
 		 * Quicker decay, bright-ish without metallic zing.
@@ -1377,7 +1377,7 @@ namespace CloudSeed
         }
 
         /**
-		 * 60% CPU
+		 * 50% CPU
 		 * B; Super nice
 		 * Near-infinite, mix-safe pad.  Very long sustain without buildup
 		 * Dark-airy band, heavy late diffusion.
