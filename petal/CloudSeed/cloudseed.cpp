@@ -7,6 +7,11 @@
 #include "daisysp.h"
 #include "terrarium.h"
 
+#include <stdio.h>
+#include <stdint.h>
+#include "util/CpuLoadMeter.h"
+#include "CpuLedIndicator.h"
+
 #include "../../CloudSeed/Default.h"
 #include "../../CloudSeed/ReverbController.h"
 #include "../../CloudSeed/FastSin.h"
@@ -17,34 +22,41 @@ using namespace daisy;
 using namespace daisysp;
 using namespace terrarium;  // This is important for mapping the correct controls to the Daisy Seed on Terrarium PCB
 
-// Declare a local daisy_petal for hardware access
 DaisyPetal hw;
-::daisy::Parameter dryOut, earlyOut, mainOut, time, diffusion, tapDecay;
-bool      bypass;
-int       c;
+::daisy::Parameter dry, earlyOut, mainOut, time, diffusion, tapDecay;
+
+bool bypass;
+int c;
 Led led1, led2;
 
-// Initialize "previous" p values
-float pdryout_value, pearlyout_value, pmainout_value, ptime_value, pdiffusion_value, pnumDelayLines, ptap_decay_value;
+float prevEarlyOut, prevMainOut, prevTime, prevDiffusion, prevTapDecay;
+int prevNumLines;
+
+// libDaisy CPU load meter (only keep what's needed)
+daisy::CpuLoadMeter cpu_meter;
 
 CloudSeed::ReverbController* reverb = 0;
-  
-// This is used in the modified CloudSeed code for allocating 
-// delay line memory to SDRAM (64MB available on Daisy)
+
+// Cpu LED indicator (extracted class)
+CpuLedIndicator cpu_led_indicator;
+
+
+// For allocating delay line memory to SDRAM (64MB available on Daisy)
 #define CUSTOM_POOL_SIZE (48*1024*1024)
 DSY_SDRAM_BSS char custom_pool[CUSTOM_POOL_SIZE];
 size_t pool_index = 0;
 int allocation_count = 0;
+
 void* custom_pool_allocate(size_t size)
 {
-        if (pool_index + size >= CUSTOM_POOL_SIZE)
-        {
-                return 0;
-        }
-        void* ptr = &custom_pool[pool_index];
-        pool_index += size;
-        return ptr;
+    if (pool_index + size >= CUSTOM_POOL_SIZE) {
+        return 0;
+    }
+    void* ptr = &custom_pool[pool_index];
+    pool_index += size;
+    return ptr;
 }
+
 
 void cyclePreset()
 {
@@ -75,6 +87,7 @@ void cyclePreset()
     //        reverb->initFactoryThroughTheLookingGlass(); // Only preset that sounds scratchy (using 4-5 delay lines, mono) causes buffer underruns
     //                                                       //   TODO Try slight modifications to this preset to allow to work
     }
+
 }
 
 
@@ -83,102 +96,99 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
                           AudioHandle::OutputBuffer out,
                           size_t                    size)
 {
+    // Notify CpuLoadMeter of block start
+    cpu_meter.OnBlockStart();
+
     //hw.ProcessAllControls();
     hw.ProcessAnalogControls();
     hw.ProcessDigitalControls();
     led1.Update();
     led2.Update();
 
-    float dryout_value = dryOut.Process();
+    float dry_val = dry.Process();
     float earlyout_value = earlyOut.Process();
     float mainout_value = mainOut.Process();
     float time_value = time.Process();
     float diffusion_value = diffusion.Process();
     float tap_decay_value = tapDecay.Process();
 
-    if ((pdryout_value < dryout_value) || ( pdryout_value> dryout_value))
-    {
-      reverb->SetParameter(::Parameter::DryOut, dryout_value);
-      pdryout_value = dryout_value;
+    if ((prevEarlyOut < earlyout_value) || ( prevEarlyOut> earlyout_value)) {
+        reverb->SetParameter(::Parameter::EarlyOut, earlyout_value);
+        prevEarlyOut = earlyout_value;
     }
 
-    if ((pearlyout_value < earlyout_value) || ( pearlyout_value> earlyout_value))
-    {
-      reverb->SetParameter(::Parameter::EarlyOut, earlyout_value);
-      pearlyout_value = earlyout_value;
+    if ((prevMainOut < mainout_value) || ( prevMainOut > mainout_value)) {
+        reverb->SetParameter(::Parameter::MainOut, mainout_value);
+        prevMainOut = mainout_value;
     }
 
-    if ((pmainout_value < mainout_value) || ( pmainout_value > mainout_value))
-    {
-      reverb->SetParameter(::Parameter::MainOut, mainout_value);
-      pmainout_value = mainout_value;
+    if ((prevTime < time_value) || ( prevTime > time_value)) {
+        reverb->SetParameter(::Parameter::LineDecay, time_value);
+        prevTime = time_value;
+    }
+    if ((prevDiffusion < diffusion_value) || ( prevDiffusion > diffusion_value)) {
+        reverb->SetParameter(::Parameter::LateDiffusionFeedback, diffusion_value);
+        prevDiffusion = diffusion_value;
     }
 
-    if ((ptime_value < time_value) || ( ptime_value > time_value))
-    {
-      reverb->SetParameter(::Parameter::LineDecay, time_value);
-      ptime_value = time_value;
-    }
-    if ((pdiffusion_value < diffusion_value) || ( pdiffusion_value > diffusion_value))
-    {
-      reverb->SetParameter(::Parameter::LateDiffusionFeedback, diffusion_value);
-      pdiffusion_value = diffusion_value;
+    if ((prevTapDecay < tap_decay_value) || ( prevTapDecay > tap_decay_value)) {
+        reverb->SetParameter(::Parameter::TapDecay, tap_decay_value);
+        prevTapDecay = tap_decay_value;
     }
 
-    if ((ptap_decay_value < tap_decay_value) || ( ptap_decay_value > tap_decay_value))
-    {
-      reverb->SetParameter(::Parameter::TapDecay, tap_decay_value);
-      ptap_decay_value = tap_decay_value;
-    }
 
     // Delay Line Switches
     //     - The .Pressed() function below counts an 'ON' switch as pressed.
     //     - Total number of switches on sets how many delay lines are activated (1 - 5)
     int switches[4] = {Terrarium::SWITCH_1, Terrarium::SWITCH_2, Terrarium::SWITCH_3, Terrarium::SWITCH_4}; // Can this be moved elsewhere?
-    float numDelayLines = 1.0;
+    
+    int numDelayLines = 1;
     for(int i=0; i<4; i++) {
         if (hw.switches[switches[i]].Pressed()) {
-            numDelayLines += 1.0;
+            numDelayLines += 1;
         }
     }
-    if (pnumDelayLines != numDelayLines) {
+    if (prevNumLines != numDelayLines) {
         //reverb->ClearBuffers();  //TODO is this needed?
         reverb->SetParameter(::Parameter::LineCount, numDelayLines);
-        pnumDelayLines = numDelayLines;
+        prevNumLines = numDelayLines;
     }
 
-    float ins[48];
-    float outs[48];
-    for (size_t i = 0; i < size; i++)
-    {
-        ins[i] = in[0][i];
+
+    float reverbIn[48];
+    float reverbOut[48];
+
+    for (size_t i = 0; i < size; i++) {
+        reverbIn[i] = in[0][i];
     }
 
+    // ToDo: Do footswitches need de-bouncing?
     // (De-)Activate bypass and toggle LED when left footswitch is pressed
-    if(hw.switches[Terrarium::FOOTSWITCH_1].RisingEdge())
-    {
+    if(hw.switches[Terrarium::FOOTSWITCH_1].RisingEdge()) {
         bypass = !bypass;
         led1.Set(bypass ? 0.0f : 1.0f);
     }
 
     // Cycle available models
-    if(hw.switches[Terrarium::FOOTSWITCH_2].RisingEdge())
-    {  
+    if(hw.switches[Terrarium::FOOTSWITCH_2].RisingEdge()) {  
         cyclePreset();
     }
 
     if(!bypass) {
-        reverb->Process(ins, outs, 48);
-        for (size_t i = 0; i < size; i++)
-        {  
-            out[0][i] = outs[i] * 1.2;  // Slight overall volume boost at 1.2
-        }
-    } else {
-        for (size_t i = 0; i < size; i++)
-        {  
-            out[0][i] = in[0][i];
+        reverb->Process(reverbIn, reverbOut, 48);
+        for (size_t i = 0; i < size; i++) {  
+            // External dry passthrough + wet only from reverb
+            out[0][i] = (in[0][i] * dry_val) + reverbOut[i];
         }
     }
+    else {
+        for (size_t i = 0; i < size; i++) {  
+            out[0][i] = (in[0][i] * dry_val);
+        }
+    }
+
+    // Notify CpuLoadMeter of block end
+    cpu_meter.OnBlockEnd();
 }
 
 int main(void)
@@ -187,6 +197,10 @@ int main(void)
 
     hw.Init();
     samplerate = hw.AudioSampleRate();
+    // Initialize CPU load meter for the audio configuration
+    cpu_meter.Init(samplerate, hw.AudioBlockSize());
+    // Initialize CPU LED indicator
+    cpu_led_indicator.Init(hw);
     c = 0;
 
     AudioLib::ValueTables::Init();
@@ -194,38 +208,42 @@ int main(void)
     
     reverb = new CloudSeed::ReverbController(samplerate);
     reverb->ClearBuffers();
-    reverb->initFactoryChorus();
 
-    //hw.SetAudioBlockSize(4);
+    bypass = true;
 
-    dryOut.Init(hw.knob[Terrarium::KNOB_1], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
+    dry.Init(hw.knob[Terrarium::KNOB_1], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     earlyOut.Init(hw.knob[Terrarium::KNOB_2], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     mainOut.Init(hw.knob[Terrarium::KNOB_3], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     diffusion.Init(hw.knob[Terrarium::KNOB_4], 0.0f, 1.0f, ::daisy::Parameter::LINEAR); 
     tapDecay.Init(hw.knob[Terrarium::KNOB_5], 0.0f, 1.0f, ::daisy::Parameter::LINEAR); 
     time.Init(hw.knob[Terrarium::KNOB_6], 0.0f, 1.0f, ::daisy::Parameter::LINEAR); 
 
-    pdryout_value = 0.0;
-    pearlyout_value = 0.0;
-    pmainout_value = 0.0;
-    ptime_value = 0.0;
-    pdiffusion_value = 0.0;
-    ptap_decay_value = 0.0;
-    pnumDelayLines = 5.0; // Set to max number of delay lines initially
+    prevEarlyOut = 0.0;
+    prevMainOut = 0.0;
+    prevTime = 0.0;
+    prevDiffusion = 0.0;
+    prevTapDecay = 0.0;
+    prevNumLines = 5;
 
-    // Init the LEDs and set activate bypass
-    led1.Init(hw.seed.GetPin(Terrarium::LED_1),false);
+    led1.Init(hw.seed.GetPin(Terrarium::LED_1), false);
     led1.Update();
-    bypass = true;
-
-    led2.Init(hw.seed.GetPin(Terrarium::LED_2),false);
+    led2.Init(hw.seed.GetPin(Terrarium::LED_2), false);
     led2.Update();
 
     hw.StartAdc();
     hw.StartAudio(AudioCallback);
-    while(1)
-    {
-        // Do Stuff Infinitely Here
+
+    while(1) {
+        static uint32_t last_ms = 0;
+        uint32_t now_ms = System::GetNow();
+        if ((now_ms - last_ms) >= 250) {
+            float load = cpu_meter.GetAvgCpuLoad() * 100.0f;
+            cpu_led_indicator.UpdateFromLoad(load, now_ms);
+            last_ms = now_ms;
+        }
+
+        // advance indicator state machine
+        cpu_led_indicator.Tick(System::GetNow());
         System::Delay(10);
     }
 }
