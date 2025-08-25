@@ -110,9 +110,9 @@ static inline void applyPreset(int idx)
         float v = reverb->GetParameter(p);
         presetValues[(int)p] = v;
         if (v <= 0.5f)
-            valueRanges[(int)p] = (1.0f - v) * 2.0f;
-        else
             valueRanges[(int)p] = v * 2.0f;
+        else
+            valueRanges[(int)p] = (1.0f - v) * 2.0f;
     }
 
     updateParms = true;
@@ -196,61 +196,54 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
         }
 
         if (fabsf(prevEarlyOut - earlyValue) > PARAM_EPS || updateParms) {
-            float v = presetValues[(int)::Parameter::EarlyOut];
-            float scaled = (earlyValue <= 0.5f)
-                                ? (2.0f * v * earlyValue)
-                                : (2.0f * (1.0f - v) * earlyValue + (2.0f * v - 1.0f));
+            float presetValue = presetValues[(int)::Parameter::EarlyOut];
+            float factor      = valueRanges[(int)::Parameter::EarlyOut];
+            float scaled      = presetValue + (earlyValue - 0.5f) * factor;
             reverb->SetParameter(::Parameter::EarlyOut, scaled);
             prevEarlyOut = earlyValue;
         }
         if (fabsf(prevLateOut - lateValue) > PARAM_EPS || updateParms) {
-            float v = presetValues[(int)::Parameter::MainOut];
-            float scaled = (lateValue <= 0.5f)
-                                ? (2.0f * v * lateValue)
-                                : (2.0f * (1.0f - v) * lateValue + (2.0f * v - 1.0f));
+            float presetValue = presetValues[(int)::Parameter::MainOut];
+            float factor      = valueRanges[(int)::Parameter::MainOut];
+            float scaled      = presetValue + (lateValue - 0.5f) * factor;
             reverb->SetParameter(::Parameter::MainOut, scaled);
             prevLateOut = lateValue;
         }
         if (fabsf(prevLineDecay - lineDecayValue) > PARAM_EPS || updateParms) {
-            float v = presetValues[(int)::Parameter::LineDecay];
-            float scaled = (lineDecayValue <= 0.5f)
-                                ? (2.0f * v * lineDecayValue)
-                                : (2.0f * (1.0f - v) * lineDecayValue + (2.0f * v - 1.0f));
+            float presetValue = presetValues[(int)::Parameter::LineDecay];
+            float factor      = valueRanges[(int)::Parameter::LineDecay];
+            float scaled      = presetValue + (lineDecayValue - 0.5f) * factor;
             reverb->SetParameter(::Parameter::LineDecay, scaled);
             prevLineDecay = lineDecayValue;
         }
         if (fabsf(prevDiffusion - diffusionValue) > PARAM_EPS || updateParms) {
-            float v = presetValues[(int)::Parameter::LateDiffusionFeedback];
-            float scaled = (diffusionValue <= 0.5f)
-                                ? (2.0f * v * diffusionValue)
-                                : (2.0f * (1.0f - v) * diffusionValue + (2.0f * v - 1.0f));
+            float presetValue = presetValues[(int)::Parameter::LateDiffusionFeedback];
+            float factor      = valueRanges[(int)::Parameter::LateDiffusionFeedback];
+            float scaled      = presetValue + (diffusionValue - 0.5f) * factor;
             reverb->SetParameter(::Parameter::LateDiffusionFeedback, scaled);
             prevDiffusion = diffusionValue;
         }
         if (fabsf(prevTapDecay - tapDecayValue) > PARAM_EPS || updateParms) {
-            float v = presetValues[(int)::Parameter::TapDecay];
-            float scaled = (tapDecayValue <= 0.5f)
-                                ? (2.0f * v * tapDecayValue)
-                                : (2.0f * (1.0f - v) * tapDecayValue + (2.0f * v - 1.0f));
+            float presetValue = presetValues[(int)::Parameter::TapDecay];
+            float factor      = valueRanges[(int)::Parameter::TapDecay];
+            float scaled      = presetValue + (tapDecayValue - 0.5f) * factor;
             reverb->SetParameter(::Parameter::TapDecay, scaled);
             prevTapDecay = tapDecayValue;
-        }    
+        }
     }
 
 
     // Delay Line Switches
-    //     - The .Pressed() function below counts an 'ON' switch as pressed.
-    //     - Total number of switches on sets how many delay lines are activated (1 - 5)
-    int switches[4] = {Terrarium::SWITCH_1, Terrarium::SWITCH_2, Terrarium::SWITCH_3, Terrarium::SWITCH_4}; // Can this be moved elsewhere?
+    //     - Total number of switches on sets how many delay lines are activated (1 - 7)
+    int switches[4] = {Terrarium::SWITCH_1, Terrarium::SWITCH_2, Terrarium::SWITCH_3};
     
     int numDelayLines = 1;
-    for(int i=0; i<4; i++) {
+    for(int i=0; i<3; i++) {
         if (hw.switches[switches[i]].Pressed()) {
-            numDelayLines += 1;
+            numDelayLines += 2;
         }
     }
     if (prevNumLines != numDelayLines) {
-        //reverb->ClearBuffers();  //TODO is this needed?
         reverb->SetParameter(::Parameter::LineCount, numDelayLines);
         prevNumLines = numDelayLines;
     }
