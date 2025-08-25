@@ -11,22 +11,22 @@ sleep 1
 
 echo "rebuilding libcloudseed"
 cd CloudSeed
-make clean | grep "warningr:\|error:"
-make | grep "warning:r\|error:"
+make clean
+make
 echo "done building libcloudseed"
 cd "$start_dir"
 
 echo "rebuilding libdaisy"
 cd libdaisy
-make clean | grep "warningr:\|error:"
-make | grep "warning:r\|error:"
+make clean
+make
 echo "done building libdaisy"
 
 echo "rebuilding DaisySP"
 cd "$start_dir"
 cd DaisySP
-make clean | grep "warning:r\|error:"
-make | grep "warning:r\|error:"
+make clean
+make
 cd "$start_dir"
 echo "done building daisySP"
 echo "done building libs"
