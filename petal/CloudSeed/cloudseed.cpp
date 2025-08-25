@@ -56,7 +56,7 @@ static std::atomic<int> g_desiredNumLines{1};
 static std::atomic<bool> g_cyclePresetRequested{false};
 static std::atomic<bool> g_toggleBypassRequested{false};
 // Precomputed switch indices for main loop
-static const int g_delay_switches[3] = { Terrarium::SWITCH_1, Terrarium::SWITCH_2, Terrarium::SWITCH_3 };
+static const int g_delay_switches[4] = { Terrarium::SWITCH_1, Terrarium::SWITCH_2, Terrarium::SWITCH_3, Terrarium::SWITCH_4 };
 
 // deadband threshold: ignore pot changes smaller than one step (0.002 ~= 1/500, so each pot has 500 steps)
 constexpr float PARAM_EPS = 0.002f;
@@ -66,6 +66,13 @@ constexpr int CONTROL_UPDATE_BLOCKS = 4;
 // For fade outs of controls when bypass pressed
 constexpr int EARLY_BYPASS_BLOCKS = 500 / CONTROL_UPDATE_BLOCKS;  // 500ms when 48000hz Fs and 48 block size
 constexpr int LATE_BYPASS_BLOCKS = 12000 / CONTROL_UPDATE_BLOCKS;
+
+// Maximum audio block size we expect to handle; buffers live in BSS to avoid stack churn
+constexpr size_t AUDIO_MAX_BLOCK = 128;
+
+// Persistent reverb IO buffers (BSS)
+static float g_reverbIn[AUDIO_MAX_BLOCK];
+static float g_reverbOut[AUDIO_MAX_BLOCK];
 
 
 daisy::CpuLoadMeter cpu_meter;
@@ -281,34 +288,27 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
 
 
     // Footswitches and switches are processed on the main loop; the audio
-    // thread reacts to requests via atomics. Use buffers sized for the
-    // maximum expected block size to avoid overruns and pass the actual
-    // block size into the reverb processor.
-    constexpr size_t MAX_BLOCK = 128;
-    static float reverbIn[MAX_BLOCK];
-    static float reverbOut[MAX_BLOCK];
-
-    if (size > MAX_BLOCK) {
-        // Shouldn't happen; cap to MAX_BLOCK to avoid UB. In practice, make
-        // sure hw.AudioBlockSize() <= MAX_BLOCK.
-        size = MAX_BLOCK;
+    // thread reacts to requests via atomics. Use persistent BSS buffers to
+    // avoid stack churn; cap size to AUDIO_MAX_BLOCK to avoid overruns.
+    if (size > AUDIO_MAX_BLOCK) {
+        size = AUDIO_MAX_BLOCK;
     }
 
     if (bypassing) {
-        memset(reverbIn, 0, size * sizeof(float));
+        memset(g_reverbIn, 0, size * sizeof(float));
     }
     else if (!bypassed) {
-        memcpy(reverbIn, in[0], size * sizeof(float));
+        memcpy(g_reverbIn, in[0], size * sizeof(float));
     }
 
     if (!bypassed) {
         if (reverb) {
-            reverb->Process(reverbIn, reverbOut, (int)size);
+            reverb->Process(g_reverbIn, g_reverbOut, (int)size);
         } else {
-            memset(reverbOut, 0, size * sizeof(float));
+            memset(g_reverbOut, 0, size * sizeof(float));
         }
         for (size_t i = 0; i < size; i++) {
-            out[0][i] = (in[0][i] * dryValue) + reverbOut[i];
+            out[0][i] = (in[0][i] * dryValue) + g_reverbOut[i];
         }
     }
     else {
@@ -375,10 +375,10 @@ int main(void)
 
         // Compute desired number of delay lines from the three switches. Keep
         // this calculation here so the audio thread only reads the atomic value.
-        int desired = 1;
-        for (int i = 0; i < 3; ++i) {
+        int desired = 2;
+        for (int i = 0; i < 4; ++i) {
             if (hw.switches[g_delay_switches[i]].Pressed())
-                desired += 2;
+                desired += 1;
         }
         g_desiredNumLines.store(desired);
 
