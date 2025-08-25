@@ -16,6 +16,16 @@
 #include <atomic>
 #include <cstring>
 
+// Fast LFSR PRNG for audio/ISR-safe randomness
+static inline uint32_t lfsr_rand()
+{
+    static uint32_t lfsr = 0xACE1u;
+    lfsr ^= lfsr << 13;
+    lfsr ^= lfsr >> 17;
+    lfsr ^= lfsr << 5;
+    return lfsr;
+}
+
 #include "../../CloudSeed/Default.h"
 #include "../../CloudSeed/ReverbController.h"
 #include "../../CloudSeed/FastSin.h"
@@ -38,7 +48,7 @@ bool updateParms;
 bool bypassing;
 bool bypassed;
 bool pendingBypass;
-int preset;
+std::atomic<int> preset{0};
 Led led1, led2;
 
 // Shared flags/commands set from main() (non-audio) and consumed in audio callback
@@ -129,13 +139,15 @@ static inline void applyPreset(int idx)
 
 void cyclePreset()
 {
-    preset += 1;
-    if (preset > 3) {
-        preset = 0;
+    int p = preset.load();
+    p += 1;
+    if (p > 3) {
+        p = 0;
     }
+    preset.store(p);
 
     //reverb->ClearBuffers();
-    applyPreset(preset);
+    applyPreset(p);
 }
 
 
@@ -176,14 +188,13 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     static float prevEarlyOut, prevLateOut, prevLineDecay, prevDiffusion, prevTapDecay;
     static int prevNumLines = -1;
 
-    static float led1Level = 0.9f;
-    static float led2Level = 0.1f;
-    static unsigned int led2Timer = 10;
-    static bool led2State = false;
+        
 
     // Downsample analog control reads to reduce ADC work and avoid calling SetParameter unnecessarily.
     if ((--control_block_ctr <= 0 && !bypassed) || updateParms)
     {
+        led1.Update();
+        led2.Update();
         control_block_ctr = CONTROL_UPDATE_BLOCKS;
 
         hw.ProcessAnalogControls();
@@ -305,33 +316,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     }
 
 
-    // LED 2 shows which preset selected.
-    switch (preset) {
-        case 0:
-            led2State = false;
-            break;
-        case 1:
-            if (--led2Timer <= 0) {
-                led2State = !led2State;
-                led2Timer = rand() % 400 + 150;
-            }
-            break;
-        case 2:
-            if (--led2Timer <= 0) {
-                led2State = !led2State;
-                led2Timer = rand() % 100 + 50;
-            }
-            break;
-        case 3:
-            led2State = true;
-            break;
-    }
-    if (led2State) {
-        led2.Set(led2Level);
-    }
-    else {
-        led2.Set(0);
-    }
+    // LED2 handled in main loop to avoid audio-thread work.
 
 
     cpu_meter.OnBlockEnd();
@@ -375,10 +360,8 @@ int main(void)
     // Main loop handles low-rate digital IO and indicators. Keep analog controls
     // processing in the audio thread to keep their timing tight.
     while(1) {
-        // Process digital controls and LEDs here (non-audio thread)
-        hw.ProcessDigitalControls();
-        led1.Update();
-        led2.Update();
+    // Process digital controls and LEDs here (non-audio thread)
+    hw.ProcessDigitalControls();
 
         // Handle footswitch presses and delay-line switches here and communicate
         // desired actions to the audio thread via atomics.
@@ -399,6 +382,46 @@ int main(void)
         }
         g_desiredNumLines.store(desired);
 
+        // LED2 shows preset activity; deterministic blink counters.
+        static int led2Counter = 0;
+        static bool led2State = false;
+        static int prevPreset = -1;
+
+        int curPreset = preset.load();
+        if (curPreset != prevPreset) {
+            prevPreset = curPreset;
+            led2Counter = 0;
+            if (curPreset == 3) {
+                led2State = true; // steady on
+            } else {
+                led2State = false; // start off for blink presets
+            }
+        }
+
+        switch (curPreset) {
+            case 0:
+                led2State = false;
+                break;
+            case 1:
+                if (++led2Counter >= 30) { // ~300ms @ ~10ms loop
+                    led2State = !led2State;
+                    led2Counter = 0;
+                }
+                break;
+            case 2:
+                if (++led2Counter >= 10) { // ~100ms @ ~10ms loop
+                    led2State = !led2State;
+                    led2Counter = 0;
+                }
+                break;
+            case 3:
+                led2State = true; // steady on
+                break;
+        }
+
+        led2.Set(led2State ? 0.1f : 0.0f);
+        // Update after Set so change takes effect immediately
+
         // Work out CPU load every 250ms
         static uint32_t last_ms = 0;
         uint32_t now_ms = System::GetNow();
@@ -411,6 +434,6 @@ int main(void)
         // advance indicator state machine
         cpu_led_indicator.Tick(System::GetNow());
 
-        System::Delay(10);
+        System::Delay(8);
     }
 }
