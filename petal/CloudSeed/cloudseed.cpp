@@ -13,6 +13,8 @@
 #include <array>
 #include "util/CpuLoadMeter.h"
 #include "CpuLedIndicator.h"
+#include <atomic>
+#include <cstring>
 
 #include "../../CloudSeed/Default.h"
 #include "../../CloudSeed/ReverbController.h"
@@ -38,6 +40,13 @@ bool bypassed;
 bool pendingBypass;
 int preset;
 Led led1, led2;
+
+// Shared flags/commands set from main() (non-audio) and consumed in audio callback
+static std::atomic<int> g_desiredNumLines{1};
+static std::atomic<bool> g_cyclePresetRequested{false};
+static std::atomic<bool> g_toggleBypassRequested{false};
+// Precomputed switch indices for main loop
+static const int g_delay_switches[3] = { Terrarium::SWITCH_1, Terrarium::SWITCH_2, Terrarium::SWITCH_3 };
 
 // deadband threshold: ignore pot changes smaller than one step (0.002 ~= 1/500, so each pot has 500 steps)
 constexpr float PARAM_EPS = 0.002f;
@@ -137,10 +146,27 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
 {
     cpu_meter.OnBlockStart();
 
-    // Process digital controls every block (fast)
-    hw.ProcessDigitalControls();
-    led1.Update();
-    led2.Update();
+    // NOTE: digital controls and LED updates are processed on the main loop
+    // to keep the audio thread light. The main loop sets atomic flags for
+    // events which the audio callback consumes here.
+
+    // Handle requests from main loop
+    if (g_cyclePresetRequested.exchange(false)) {
+        if (reverb) cyclePreset();
+    }
+    if (g_toggleBypassRequested.exchange(false)) {
+        // Simulate footswitch press behavior: toggle bypassing/bypassed states
+        if (bypassing || bypassed) {
+            bypassing = bypassed = false;
+            led1.Set(0.9f);
+            // reset fade counters
+            // (these will be picked up next time analog controls are processed)
+        }
+        else {
+            bypassing = true;
+            led1.Set(0);
+        }
+    }
 
     static int earlyBypassCountdown = EARLY_BYPASS_BLOCKS;
     static int lateBypassCountdown = LATE_BYPASS_BLOCKS;
@@ -234,72 +260,48 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
 
 
     // Delay Line Switches
-    //     - Total number of switches on sets how many delay lines are activated (1 - 7)
-    int switches[4] = {Terrarium::SWITCH_1, Terrarium::SWITCH_2, Terrarium::SWITCH_3};
-    
-    int numDelayLines = 1;
-    for(int i=0; i<3; i++) {
-        if (hw.switches[switches[i]].Pressed()) {
-            numDelayLines += 2;
-        }
-    }
+    // The main loop computes desired num lines and writes into g_desiredNumLines.
+    // Read it here and update reverb if changed.
+    int numDelayLines = g_desiredNumLines.load();
     if (prevNumLines != numDelayLines) {
-        reverb->SetParameter(::Parameter::LineCount, numDelayLines);
+    if (reverb) reverb->SetParameter(::Parameter::LineCount, numDelayLines);
         prevNumLines = numDelayLines;
     }
 
 
-    float reverbIn[48];
-    float reverbOut[48];
+    // Footswitches and switches are processed on the main loop; the audio
+    // thread reacts to requests via atomics. Use buffers sized for the
+    // maximum expected block size to avoid overruns and pass the actual
+    // block size into the reverb processor.
+    constexpr size_t MAX_BLOCK = 128;
+    static float reverbIn[MAX_BLOCK];
+    static float reverbOut[MAX_BLOCK];
 
-
-    // ToDo: Do footswitches need de-bouncing?
-    
-    // Cycle available models
-    if (hw.switches[Terrarium::FOOTSWITCH_2].RisingEdge()) {  
-        cyclePreset();
-    }
-    
-    // (De-)Activate bypass and toggle LED when left footswitch is pressed
-    if (hw.switches[Terrarium::FOOTSWITCH_1].RisingEdge()) {
-        if (bypassing || bypassed) {
-            bypassing = bypassed = false;
-            led1.Set(led1Level);
-            earlyBypassCountdown = EARLY_BYPASS_BLOCKS;
-            lateBypassCountdown = LATE_BYPASS_BLOCKS;
-            // Re-apply current preset when turning effect back on
-            applyPreset(preset);
-            // Force parameter refresh on next control tick
-            prevEarlyOut = prevLateOut = prevLineDecay = prevDiffusion = prevTapDecay;
-        }
-        else {
-            bypassing = true;
-            led1.Set(0);
-        }
+    if (size > MAX_BLOCK) {
+        // Shouldn't happen; cap to MAX_BLOCK to avoid UB. In practice, make
+        // sure hw.AudioBlockSize() <= MAX_BLOCK.
+        size = MAX_BLOCK;
     }
 
-    
     if (bypassing) {
-        for (size_t i = 0; i < size; i++) {
-            reverbIn[i] = 0;
-        }
-    }    
-    else if (!bypassed) {
-        for (size_t i = 0; i < size; i++) {
-            reverbIn[i] = in[0][i];
-        }
+        memset(reverbIn, 0, size * sizeof(float));
     }
-    
+    else if (!bypassed) {
+        memcpy(reverbIn, in[0], size * sizeof(float));
+    }
+
     if (!bypassed) {
-        reverb->Process(reverbIn, reverbOut, 48);
-        for (size_t i = 0; i < size; i++) {  
+        if (reverb) {
+            reverb->Process(reverbIn, reverbOut, (int)size);
+        } else {
+            memset(reverbOut, 0, size * sizeof(float));
+        }
+        for (size_t i = 0; i < size; i++) {
             out[0][i] = (in[0][i] * dryValue) + reverbOut[i];
         }
     }
     else {
-        for (size_t i = 0; i < size; i++) {  
-            out[0][i] = in[0][i];
-        }
+        memcpy(out[0], in[0], size * sizeof(float));
     }
 
 
@@ -370,8 +372,34 @@ int main(void)
     hw.StartAdc();
     hw.StartAudio(AudioCallback);
 
+    // Main loop handles low-rate digital IO and indicators. Keep analog controls
+    // processing in the audio thread to keep their timing tight.
     while(1) {
-        // Work out CPU load
+        // Process digital controls and LEDs here (non-audio thread)
+        hw.ProcessDigitalControls();
+        led1.Update();
+        led2.Update();
+
+        // Handle footswitch presses and delay-line switches here and communicate
+        // desired actions to the audio thread via atomics.
+        // Footswitch 1 toggles bypass; Footswitch 2 cycles preset.
+        if (hw.switches[Terrarium::FOOTSWITCH_1].RisingEdge()) {
+            g_toggleBypassRequested.store(true);
+        }
+        if (hw.switches[Terrarium::FOOTSWITCH_2].RisingEdge()) {
+            g_cyclePresetRequested.store(true);
+        }
+
+        // Compute desired number of delay lines from the three switches. Keep
+        // this calculation here so the audio thread only reads the atomic value.
+        int desired = 1;
+        for (int i = 0; i < 3; ++i) {
+            if (hw.switches[g_delay_switches[i]].Pressed())
+                desired += 2;
+        }
+        g_desiredNumLines.store(desired);
+
+        // Work out CPU load every 250ms
         static uint32_t last_ms = 0;
         uint32_t now_ms = System::GetNow();
         if ((now_ms - last_ms) >= 250) {
