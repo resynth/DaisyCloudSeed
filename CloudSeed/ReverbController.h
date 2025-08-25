@@ -8,8 +8,6 @@
 #include "Default.h"
 #include "Parameter.h"
 #include "ReverbChannel.h"
-
-#include "ReverbController.h"
 #include "AudioLib/ValueTables.h"
 #include "AllpassDiffuser.h"
 #include "MultitapDiffuser.h"
@@ -48,6 +46,9 @@ namespace CloudSeed
 			//initFactoryThroughTheLookingGlass();
 			
 		}
+
+		// Simple getter for parameter values (mirror of SetParameter)
+		float GetParameter(Parameter p) { return parameters[(int)p]; }
 
 		/**
 		 * 50%
@@ -109,7 +110,6 @@ namespace CloudSeed
 			{
 				SetParameter((Parameter)value, parameters[value]);
 			}
-
 		}
 
 		/**
@@ -596,10 +596,10 @@ namespace CloudSeed
 			parameters[(int)Parameter::EarlyOut] = 0.0;
 			parameters[(int)Parameter::MainOut] = 0.95499974489212036;
 			parameters[(int)Parameter::HiPassEnabled] = 0.0;
-			parameters[(int)Parameter::LowPassEnabled] = 1.0;
+			parameters[(int)Parameter::LowPassEnabled] = 0.0;
 			parameters[(int)Parameter::LowShelfEnabled] = 0.0;
 			parameters[(int)Parameter::HighShelfEnabled] = 0.0;
-			parameters[(int)Parameter::CutoffEnabled] = 1.0;
+			parameters[(int)Parameter::CutoffEnabled] = 0.0;
 			parameters[(int)Parameter::LateStageTap] = 1.0;
 			parameters[(int)Parameter::Interpolation] = 1.0;
 			for (auto value = 0; value < (int)Parameter::Count; value++)

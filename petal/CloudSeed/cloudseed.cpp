@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <math.h>
+#include <array>
 #include "util/CpuLoadMeter.h"
 #include "CpuLedIndicator.h"
 
@@ -24,15 +25,21 @@ using namespace daisysp;
 using namespace terrarium;  // This is important for mapping the correct controls to the Daisy Seed on Terrarium PCB
 
 DaisyPetal hw;
-::daisy::Parameter dry, earlyOut, lateOut, time, diffusion, tapDecay;
+::daisy::Parameter dry, earlyOut, lateOut, lineDecay, diffusion, tapDecay;
 
+// Use enum-indexed arrays for preset values and their ranges. This is
+// simpler and type-safe compared to string-keyed maps.
+static std::array<float, (int)::Parameter::Count> presetValues = {};
+static std::array<float, (int)::Parameter::Count> valueRanges  = {};
+
+bool updateParms;
 bool bypassing;
 bool bypassed;
 bool pendingBypass;
-int c;
+int preset;
 Led led1, led2;
 
-// deadband threshold: ignore changes smaller than one step (0.002 ~= 1/500)
+// deadband threshold: ignore pot changes smaller than one step (0.002 ~= 1/500, so each pot has 500 steps)
 constexpr float PARAM_EPS = 0.002f;
 // update analog controls every N audio blocks to reduce audio-thread work
 constexpr int CONTROL_UPDATE_BLOCKS = 4;
@@ -43,11 +50,10 @@ constexpr int LATE_BYPASS_BLOCKS = 12000 / CONTROL_UPDATE_BLOCKS;
 
 
 daisy::CpuLoadMeter cpu_meter;
-
-CloudSeed::ReverbController* reverb = 0;
-
 // Cpu LED indicator (extracted class)
 CpuLedIndicator cpu_led_indicator;
+
+CloudSeed::ReverbController* reverb = 0;
 
 
 // For allocating delay line memory to SDRAM (64MB available on Daisy)
@@ -71,28 +77,56 @@ static inline void applyPreset(int idx)
 {
     switch (idx)
     {
+        //case 0: reverb->initFactorySmallRoom(); break;        
         case 0: reverb->initFactorySmallRoom(); break;
-        case 1: reverb->initGpt5AiryWideChamber(); break;
-        case 2: reverb->initFactoryMediumSpace(); break;
-        case 3: reverb->initFactoryNoiseInTheHallway(); break;
-        case 4: reverb->initFactoryDullEchos(); break;
-        case 5: reverb->initFactoryHyperplane(); break;
-        case 6: reverb->initFactoryChorus(); break;
-        case 7: reverb->initFactoryRubiKaFields(); break;
-        case 8: reverb->initGpt5NearInfinitePad(); break;
+        case 1: reverb->initFactoryMediumSpace(); break;
+        case 2: reverb->initFactoryChorus(); break;
+        case 3: reverb->initFactoryRubiKaFields(); break;
+        
         default: break;
+
+        /**
+         * case 5: reverb->initFactoryHyperplane(); break;
+         * case 4: reverb->initFactoryDullEchos(); break; 
+         * case 3: reverb->initFactoryNoiseInTheHallway(); break;
+         * case 1: reverb->initGpt5AiryWideChamber(); break;
+         * case 8: reverb->initGpt5NearInfinitePad(); break;
+         */
     }
+
+    // The controls will have the preset value at pot mid point and scaled so
+    // 0 is not reached before pot low and 1 is not reached before pot max.
+    // Use the Parameter enum directly and store results in enum-indexed arrays.
+    const ::Parameter paramsToRead[] = {
+        ::Parameter::EarlyOut,
+        ::Parameter::MainOut,
+        ::Parameter::LineDecay,
+        ::Parameter::TapDecay,
+        ::Parameter::LateDiffusionFeedback
+    };
+
+    for (auto p : paramsToRead)
+    {
+        float v = reverb->GetParameter(p);
+        presetValues[(int)p] = v;
+        if (v <= 0.5f)
+            valueRanges[(int)p] = (1.0f - v) * 2.0f;
+        else
+            valueRanges[(int)p] = v * 2.0f;
+    }
+
+    updateParms = true;
 }
 
 void cyclePreset()
 {
-    c += 1;
-    if (c > 8) {
-        c = 0;
+    preset += 1;
+    if (preset > 3) {
+        preset = 0;
     }
 
-    reverb->ClearBuffers();
-    applyPreset(c);
+    //reverb->ClearBuffers();
+    applyPreset(preset);
 }
 
 
@@ -101,7 +135,6 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
                           AudioHandle::OutputBuffer out,
                           size_t                    size)
 {
-    // Notify CpuLoadMeter of block start
     cpu_meter.OnBlockStart();
 
     // Process digital controls every block (fast)
@@ -113,13 +146,17 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     static int lateBypassCountdown = LATE_BYPASS_BLOCKS;
 
     static int control_block_ctr = 0;
-    static float dryValue = 0.0f, earlyValue = 0.0f, lateValue = 0.0f,
-                 timeValue = 0.0f, diffusionValue = 0.0f, tapDecayValue = 0.0f;
-    static float prevEarlyOut, prevLateOut, prevTime, prevDiffusion, prevTapDecay;
-    static int prevNumLines;
+    static float dryValue, earlyValue, lateValue, lineDecayValue, diffusionValue, tapDecayValue;
+    static float prevEarlyOut, prevLateOut, prevLineDecay, prevDiffusion, prevTapDecay;
+    static int prevNumLines = -1;
+
+    static float led1Level = 0.9f;
+    static float led2Level = 0.1f;
+    static unsigned int led2Timer = 10;
+    static bool led2State = false;
 
     // Downsample analog control reads to reduce ADC work and avoid calling SetParameter unnecessarily.
-    if (--control_block_ctr <= 0 && !bypassed)
+    if ((--control_block_ctr <= 0 && !bypassed) || updateParms)
     {
         control_block_ctr = CONTROL_UPDATE_BLOCKS;
 
@@ -129,7 +166,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
         if (!bypassed) {
             earlyValue     = earlyOut.Process();
             lateValue      = lateOut.Process();
-            timeValue      = time.Process();
+            lineDecayValue      = lineDecay.Process();
             diffusionValue = diffusion.Process();
             tapDecayValue       = tapDecay.Process();
         }
@@ -147,10 +184,10 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
                     float lateReduxFactor = (float)lateBypassCountdown / (float)LATE_BYPASS_BLOCKS;
                     // lateValue = lateValue * lateReduxFactor;
                     tapDecayValue *= lateReduxFactor;
-                    timeValue *= lateReduxFactor;
+                    lineDecayValue *= lateReduxFactor;
                 }
                 else {
-                    lateValue = tapDecayValue = timeValue = 0;
+                    lateValue = tapDecayValue = lineDecayValue = 0;
                     bypassing = false;
                     bypassed = true;
                     reverb->ClearBuffers();
@@ -158,28 +195,46 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
             }
         }
 
-        if (!bypassed) {
-            if (fabsf(prevEarlyOut - earlyValue) > PARAM_EPS) {
-                reverb->SetParameter(::Parameter::EarlyOut, earlyValue);
-                prevEarlyOut = earlyValue;
-            }
-            if (fabsf(prevLateOut - lateValue) > PARAM_EPS) {
-                reverb->SetParameter(::Parameter::MainOut, lateValue);
-                prevLateOut = lateValue;
-            }
-            if (fabsf(prevTime - timeValue) > PARAM_EPS) {
-                reverb->SetParameter(::Parameter::LineDecay, timeValue);
-                prevTime = timeValue;
-            }
-            if (fabsf(prevDiffusion - diffusionValue) > PARAM_EPS) {
-                reverb->SetParameter(::Parameter::LateDiffusionFeedback, diffusionValue);
-                prevDiffusion = diffusionValue;
-            }
-            if (fabsf(prevTapDecay - tapDecayValue) > PARAM_EPS) {
-                reverb->SetParameter(::Parameter::TapDecay, tapDecayValue);
-                prevTapDecay = tapDecayValue;
-            }
+        if (fabsf(prevEarlyOut - earlyValue) > PARAM_EPS || updateParms) {
+            float v = presetValues[(int)::Parameter::EarlyOut];
+            float scaled = (earlyValue <= 0.5f)
+                                ? (2.0f * v * earlyValue)
+                                : (2.0f * (1.0f - v) * earlyValue + (2.0f * v - 1.0f));
+            reverb->SetParameter(::Parameter::EarlyOut, scaled);
+            prevEarlyOut = earlyValue;
         }
+        if (fabsf(prevLateOut - lateValue) > PARAM_EPS || updateParms) {
+            float v = presetValues[(int)::Parameter::MainOut];
+            float scaled = (lateValue <= 0.5f)
+                                ? (2.0f * v * lateValue)
+                                : (2.0f * (1.0f - v) * lateValue + (2.0f * v - 1.0f));
+            reverb->SetParameter(::Parameter::MainOut, scaled);
+            prevLateOut = lateValue;
+        }
+        if (fabsf(prevLineDecay - lineDecayValue) > PARAM_EPS || updateParms) {
+            float v = presetValues[(int)::Parameter::LineDecay];
+            float scaled = (lineDecayValue <= 0.5f)
+                                ? (2.0f * v * lineDecayValue)
+                                : (2.0f * (1.0f - v) * lineDecayValue + (2.0f * v - 1.0f));
+            reverb->SetParameter(::Parameter::LineDecay, scaled);
+            prevLineDecay = lineDecayValue;
+        }
+        if (fabsf(prevDiffusion - diffusionValue) > PARAM_EPS || updateParms) {
+            float v = presetValues[(int)::Parameter::LateDiffusionFeedback];
+            float scaled = (diffusionValue <= 0.5f)
+                                ? (2.0f * v * diffusionValue)
+                                : (2.0f * (1.0f - v) * diffusionValue + (2.0f * v - 1.0f));
+            reverb->SetParameter(::Parameter::LateDiffusionFeedback, scaled);
+            prevDiffusion = diffusionValue;
+        }
+        if (fabsf(prevTapDecay - tapDecayValue) > PARAM_EPS || updateParms) {
+            float v = presetValues[(int)::Parameter::TapDecay];
+            float scaled = (tapDecayValue <= 0.5f)
+                                ? (2.0f * v * tapDecayValue)
+                                : (2.0f * (1.0f - v) * tapDecayValue + (2.0f * v - 1.0f));
+            reverb->SetParameter(::Parameter::TapDecay, scaled);
+            prevTapDecay = tapDecayValue;
+        }    
     }
 
 
@@ -205,7 +260,6 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     float reverbOut[48];
 
 
-
     // ToDo: Do footswitches need de-bouncing?
     
     // Cycle available models
@@ -217,15 +271,20 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     if (hw.switches[Terrarium::FOOTSWITCH_1].RisingEdge()) {
         if (bypassing || bypassed) {
             bypassing = bypassed = false;
-            led1.Set(true);
+            led1.Set(led1Level);
             earlyBypassCountdown = EARLY_BYPASS_BLOCKS;
             lateBypassCountdown = LATE_BYPASS_BLOCKS;
+            // Re-apply current preset when turning effect back on
+            applyPreset(preset);
+            // Force parameter refresh on next control tick
+            prevEarlyOut = prevLateOut = prevLineDecay = prevDiffusion = prevTapDecay;
         }
         else {
             bypassing = true;
-            led1.Set(false);
+            led1.Set(0);
         }
     }
+
     
     if (bypassing) {
         for (size_t i = 0; i < size; i++) {
@@ -251,7 +310,35 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     }
 
 
-    // Notify CpuLoadMeter of block end
+    // LED 2 shows which preset selected.
+    switch (preset) {
+        case 0:
+            led2State = false;
+            break;
+        case 1:
+            if (--led2Timer <= 0) {
+                led2State = !led2State;
+                led2Timer = rand() % 400 + 150;
+            }
+            break;
+        case 2:
+            if (--led2Timer <= 0) {
+                led2State = !led2State;
+                led2Timer = rand() % 100 + 50;
+            }
+            break;
+        case 3:
+            led2State = true;
+            break;
+    }
+    if (led2State) {
+        led2.Set(led2Level);
+    }
+    else {
+        led2.Set(0);
+    }
+
+
     cpu_meter.OnBlockEnd();
 }
 
@@ -261,32 +348,31 @@ int main(void)
 
     hw.Init();
     samplerate = hw.AudioSampleRate();
-    // Initialize CPU load meter for the audio configuration
-    cpu_meter.Init(samplerate, hw.AudioBlockSize());
-    // Initialize CPU LED indicator
-    cpu_led_indicator.Init(hw);
-    c = 0;
-
-    AudioLib::ValueTables::Init();
-    CloudSeed::FastSin::Init();
-    
-    reverb = new CloudSeed::ReverbController(samplerate);
-    reverb->ClearBuffers();
-
-    bypassed = true;
 
     dry.Init(hw.knob[Terrarium::KNOB_1], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     earlyOut.Init(hw.knob[Terrarium::KNOB_2], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     lateOut.Init(hw.knob[Terrarium::KNOB_3], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     diffusion.Init(hw.knob[Terrarium::KNOB_4], 0.0f, 1.0f, ::daisy::Parameter::LINEAR); 
     tapDecay.Init(hw.knob[Terrarium::KNOB_5], 0.0f, 1.0f, ::daisy::Parameter::LINEAR); 
-    time.Init(hw.knob[Terrarium::KNOB_6], 0.0f, 1.0f, ::daisy::Parameter::LINEAR); 
-
+    lineDecay.Init(hw.knob[Terrarium::KNOB_6], 0.0f, 1.0f, ::daisy::Parameter::LINEAR); 
 
     led1.Init(hw.seed.GetPin(Terrarium::LED_1), false);
     led1.Update();
     led2.Init(hw.seed.GetPin(Terrarium::LED_2), false);
     led2.Update();
+    
+    cpu_meter.Init(samplerate, hw.AudioBlockSize());
+    cpu_led_indicator.Init(hw);
+
+    AudioLib::ValueTables::Init();
+    CloudSeed::FastSin::Init();
+    
+    reverb = new CloudSeed::ReverbController(samplerate);
+    reverb->ClearBuffers();
+    
+    bypassed = true;
+    applyPreset(0);
+    updateParms = true;
 
     hw.StartAdc();
     hw.StartAudio(AudioCallback);

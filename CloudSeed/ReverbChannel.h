@@ -338,6 +338,11 @@ namespace CloudSeed
 			}
 		}
 
+		float GetParameter(Parameter para)
+		{
+			return parameters[para];
+		}
+
 		void Process(float* input, int sampleCount)
 		{
 			int len = sampleCount;
