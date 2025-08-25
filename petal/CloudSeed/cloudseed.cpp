@@ -16,8 +16,8 @@
 #include <atomic>
 #include <cstring>
 
-// Fast LFSR PRNG for audio/ISR-safe randomness
-static inline uint32_t lfsr_rand()
+// Fast LFSR PRNG for audio/ISR-safe randomness, currently unused.
+static thread_local inline uint32_t lfsr_rand()
 {
     static uint32_t lfsr = 0xACE1u;
     lfsr ^= lfsr << 13;
@@ -326,7 +326,7 @@ int main(void)
 {
     float samplerate;
 
-    hw.Init();
+    hw.Init(true); // `true` sets MCU clock to 480Mhz rather than 400Mhz!
     samplerate = hw.AudioSampleRate();
 
     dry.Init(hw.knob[Terrarium::KNOB_1], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);

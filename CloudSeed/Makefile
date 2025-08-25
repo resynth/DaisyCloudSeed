@@ -116,7 +116,7 @@ CPPFLAGS = $(CFLAGS)
 CPPFLAGS += \
 -fno-exceptions \
 -finline-functions \
--fno-aggressive-loop-optimizations
+# -fno-aggressive-loop-optimizations  
 
 #######################################
 # LDFLAGS # Not Used 
