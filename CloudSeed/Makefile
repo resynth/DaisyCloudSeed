@@ -52,7 +52,7 @@ CXX = $(GCC_PATH)/$(PREFIX)g++
 AS = $(GCC_PATH)/$(PREFIX)gcc -x assembler-with-cpp
 CP = $(GCC_PATH)/$(PREFIX)objcopy
 SZ = $(GCC_PATH)/$(PREFIX)size
-AR = $(GCC_PATH)/$(PREFIX)ar
+AR = $(GCC_PATH)/$(PREFIX)gcc-ar
 GDB = $(GCC_PATH)/$(PREFIX)gdb
 else
 CC = $(PREFIX)gcc
@@ -60,7 +60,7 @@ CXX = $(PREFIX)g++
 AS = $(PREFIX)gcc -x assembler-with-cpp
 CP = $(PREFIX)objcopy
 SZ = $(PREFIX)size
-AR = $(PREFIX)ar
+AR = $(PREFIX)gcc-ar
 GDB = $(PREFIX)gdb
 endif
 HEX = $(CP) -O ihex
@@ -95,7 +95,8 @@ C_DEFS =  \
 -DUSE_HAL_DRIVER \
 -DSTM32H750xx \
 -DUSE_HAL_DRIVER \
--DSTM32H750xx
+-DSTM32H750xx \
+-DNDEBUG
 
 C_INCLUDES = \
 -I. \
@@ -103,7 +104,7 @@ C_INCLUDES = \
 # compile gcc flags
 ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
 
-CFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -Werror -fdata-sections -ffunction-sections
+CFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -Werror -fdata-sections -ffunction-sections -flto
 
 ifeq ($(DEBUG), 1)
 CFLAGS += -g -gdwarf-2
@@ -115,6 +116,8 @@ CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)"
 CPPFLAGS = $(CFLAGS)
 CPPFLAGS += \
 -fno-exceptions \
+-fno-rtti \
+-fno-unwind-tables \
 -finline-functions \
 # -fno-aggressive-loop-optimizations  
 
