@@ -10,7 +10,7 @@ namespace CloudSeed
 	{
 	private:
 		static const int DataSize = 32768;
-		static DSY_SDRAM_BSS float data[DataSize];
+		static float data[DataSize];
 
 	public:
 		static void ZeroBuffer(float* buffer, int len);

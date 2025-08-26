@@ -64,7 +64,7 @@ constexpr int EARLY_BYPASS_BLOCKS = 500 / CONTROL_UPDATE_BLOCKS;  // 500ms when 
 constexpr int LATE_BYPASS_BLOCKS = 12000 / CONTROL_UPDATE_BLOCKS;
 
 // Persistent reverb IO buffers (BSS)
-static float g_reverbIn[AUDIO_BLOCK_SIZE];
+alignas(32) static float g_reverbIn[AUDIO_BLOCK_SIZE];
 //static float g_reverbOut[AUDIO_BLOCK_SIZE];
 
 
@@ -77,18 +77,42 @@ CloudSeed::ReverbController* reverb = 0;
 
 // For allocating delay line memory to SDRAM (64MB available on Daisy)
 #define CUSTOM_POOL_SIZE (48*1024*1024)
-DSY_SDRAM_BSS char custom_pool[CUSTOM_POOL_SIZE];
+// Align the pool base to the M7 D-Cache line size (32 bytes) for better SDRAM/cache efficiency.
+DSY_SDRAM_BSS alignas(32) char custom_pool[CUSTOM_POOL_SIZE];
 size_t pool_index = 0;
 int allocation_count = 0;
 
 void* custom_pool_allocate(size_t size)
 {
-    if (pool_index + size >= CUSTOM_POOL_SIZE) {
+    // Round up to 32-byte alignment to avoid split cache lines
+    const size_t ALIGN = 32;
+    size = (size + (ALIGN - 1)) & ~(ALIGN - 1);
+
+    // Robust bound check to avoid overflow and ensure space for aligned size
+    if (size > (CUSTOM_POOL_SIZE - pool_index)) {
         return 0;
     }
     void* ptr = &custom_pool[pool_index];
     pool_index += size;
     return ptr;
+}
+
+
+// Enable flush-to-zero for Cortex-M4F/M7F to avoid denormal slowdowns. (Reverb tail ends!)
+static inline void EnableFlushToZero()
+{
+#if defined(__arm__) || defined(__thumb__)
+    // Set FZ (bit 24) in FPSCR: flush subnormal inputs/results to zero.
+    uint32_t fpscr;
+    __asm volatile("VMRS %0, FPSCR" : "=r"(fpscr));
+    fpscr |= (1u << 24); // FZ
+    __asm volatile("VMSR FPSCR, %0" : : "r"(fpscr));
+
+    // Also set default FZ in FPDSCR so new FP contexts inherit it.
+    // FPDSCR is at FPU->FPDSCR (CMSIS), but we can write the register directly if headers vary.
+    volatile uint32_t* FPDSCR = (uint32_t*)0xE000EF3C; // FPU->FPDSCR
+    *FPDSCR |= (1u << 24); // FZ
+#endif
 }
 
 
@@ -319,6 +343,7 @@ int main(void)
     float samplerate;
 
     hw.Init(true); // `true` sets MCU clock to 480Mhz rather than 400Mhz!
+    EnableFlushToZero(); // <<< avoid denormal-induced CPU spikes
 	hw.SetAudioBlockSize(AUDIO_BLOCK_SIZE);
     samplerate = hw.AudioSampleRate();
 
