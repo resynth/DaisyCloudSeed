@@ -31,7 +31,7 @@ using namespace daisysp;
 using namespace terrarium;  // This is important for mapping the correct controls to the Daisy Seed on Terrarium PCB
 
 DaisyPetal hw;
-::daisy::Parameter dry, earlyOut, lateOut, lineDecay, diffusion, tapDecay;
+::daisy::Parameter earlyOut, lateOut, lineDecay, diffusion, tapDecay;
 
 // Use enum-indexed arrays for preset values and their ranges. This is
 // simpler and type-safe compared to string-keyed maps.
@@ -53,7 +53,7 @@ static std::atomic<bool> g_toggleBypassRequested{false};
 static const int g_delay_switches[4] = { Terrarium::SWITCH_1, Terrarium::SWITCH_2, Terrarium::SWITCH_3, Terrarium::SWITCH_4 };
 
 // Maximum audio block size we expect to handle; buffers live in BSS to avoid stack churn
-constexpr size_t AUDIO_MAX_BLOCK = 96;
+constexpr size_t AUDIO_BLOCK_SIZE = 96;
 // update analog controls every N audio blocks to reduce audio-thread work
 constexpr int CONTROL_UPDATE_BLOCKS = 4;
 // deadband threshold: ignore pot changes smaller than one step (0.005 ~= 1/200, so each pot has 200 steps)
@@ -64,8 +64,8 @@ constexpr int EARLY_BYPASS_BLOCKS = 500 / CONTROL_UPDATE_BLOCKS;  // 500ms when 
 constexpr int LATE_BYPASS_BLOCKS = 12000 / CONTROL_UPDATE_BLOCKS;
 
 // Persistent reverb IO buffers (BSS)
-static float g_reverbIn[AUDIO_MAX_BLOCK];
-static float g_reverbOut[AUDIO_MAX_BLOCK];
+static float g_reverbIn[AUDIO_BLOCK_SIZE];
+//static float g_reverbOut[AUDIO_BLOCK_SIZE];
 
 
 daisy::CpuLoadMeter cpu_meter;
@@ -96,11 +96,16 @@ static inline void applyPreset(int idx)
 {
     switch (idx)
     {
-        //case 0: reverb->initFactorySmallRoom(); break;        
-        case 0: reverb->initFactorySmallRoom(); break;
-        case 1: reverb->initFactoryMediumSpace(); break;
-        case 2: reverb->initFactoryChorus(); break;
-        case 3: reverb->initFactoryRubiKaFields(); break;
+        //case 0: reverb->initFactorySmallRoom(); break;
+        // case 0: reverb->initGpt5AiryWideChamber(); break;
+        // case 1: reverb->initFactoryMediumSpace(); break;
+        // case 2: reverb->initFactoryChorus(); break;
+        // case 3: reverb->initFactoryRubiKaFields(); break;
+
+        case 0: reverb->initFactoryThroughTheLookingGlass(); break;
+        case 1: reverb->initGpt5AmbientBloom(); break;
+        case 2: reverb->initGpt5GrainBloomCloud(); break;
+        case 3: reverb->initGpt5ViolinHallWide(); break;
         
         default: break;
 
@@ -164,7 +169,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
 
     // Handle requests from main loop
     if (g_cyclePresetRequested.exchange(false)) {
-        if (reverb) cyclePreset();
+        cyclePreset();
     }
     if (g_toggleBypassRequested.exchange(false)) {
         // Simulate footswitch press behavior: toggle bypassing/bypassed states
@@ -184,7 +189,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     static int lateBypassCountdown = LATE_BYPASS_BLOCKS;
 
     static int control_block_ctr = 0;
-    static float dryValue, earlyValue, lateValue, lineDecayValue, diffusionValue, tapDecayValue;
+    static float earlyValue, lateValue, lineDecayValue, diffusionValue, tapDecayValue;
     static float prevEarlyOut, prevLateOut, prevLineDecay, prevDiffusion, prevTapDecay;
     static int prevNumLines = -1;
 
@@ -200,7 +205,6 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
         control_block_ctr = CONTROL_UPDATE_BLOCKS;
 
         hw.ProcessAnalogControls();
-        dryValue       = dry.Process();
 
         if (!bypassed) {
             earlyValue     = earlyOut.Process();
@@ -277,16 +281,16 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     // Read it here and update reverb if changed.
     int numDelayLines = g_requestedNumLines.load();
     if (prevNumLines != numDelayLines) {
-    if (reverb) reverb->SetParameter(::Parameter::LineCount, numDelayLines);
+    reverb->SetParameter(::Parameter::LineCount, numDelayLines);
         prevNumLines = numDelayLines;
     }
 
 
     // Footswitches and switches are processed on the main loop; the audio
     // thread reacts to requests via atomics. Use persistent BSS buffers to
-    // avoid stack churn; cap size to AUDIO_MAX_BLOCK to avoid overruns.
-    if (size > AUDIO_MAX_BLOCK) {
-        size = AUDIO_MAX_BLOCK;
+    // avoid stack churn; cap size to AUDIO_BLOCK_SIZE to avoid overruns.
+    if (size > AUDIO_BLOCK_SIZE) {
+        size = AUDIO_BLOCK_SIZE;
     }
 
     if (bypassing) {
@@ -297,17 +301,10 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     }
 
     if (!bypassed) {
-        if (reverb) {
-            reverb->Process(g_reverbIn, g_reverbOut, (int)size);
-        } else {
-            memset(g_reverbOut, 0, size * sizeof(float));
-        }
-        for (size_t i = 0; i < size; i++) {
-            out[0][i] = (in[0][i] * dryValue) + g_reverbOut[i];
-        }
+        out[0] = reverb->Process(g_reverbIn, (int)size);
     }
     else {
-        memcpy(out[0], in[0], size * sizeof(float));
+        memset(out[0], 0, size * sizeof(float));
     }
 
 
@@ -322,9 +319,10 @@ int main(void)
     float samplerate;
 
     hw.Init(true); // `true` sets MCU clock to 480Mhz rather than 400Mhz!
+	hw.SetAudioBlockSize(AUDIO_BLOCK_SIZE);
     samplerate = hw.AudioSampleRate();
 
-    dry.Init(hw.knob[Terrarium::KNOB_1], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
+    //dry.Init(hw.knob[Terrarium::KNOB_1], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     earlyOut.Init(hw.knob[Terrarium::KNOB_2], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     lateOut.Init(hw.knob[Terrarium::KNOB_3], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     diffusion.Init(hw.knob[Terrarium::KNOB_4], 0.0f, 1.0f, ::daisy::Parameter::LINEAR); 
@@ -342,7 +340,7 @@ int main(void)
     AudioLib::ValueTables::Init();
     CloudSeed::FastSin::Init();
     
-    reverb = new CloudSeed::ReverbController(samplerate);
+    reverb = new CloudSeed::ReverbController(samplerate, AUDIO_BLOCK_SIZE);
     reverb->ClearBuffers();
     
     bypassed = true;

@@ -18,23 +18,24 @@ namespace CloudSeed
 	class ReverbController
 	{
 	private:
-		static const int bufferSize = 96;
+		int bufferSize = 256;
 		int samplerate;
 
 		ReverbChannel channelL;
 		//ReverbChannel channelR;
-		float leftChannelIn[bufferSize];
+		// Mono build: no need for per-sample staging buffers; process directly
+		// into the channel and copy out.
 		//float rightChannelIn[bufferSize];
-		float leftLineBuffer[bufferSize];
 		//float rightLineBuffer[bufferSize];
 		float parameters[(int)Parameter::Count];
 
 	public:
-		ReverbController(int samplerate)
-			: channelL(bufferSize, samplerate, ChannelLR::Left)
+		ReverbController(int samplerate, int blockSize)
+			: channelL(blockSize, samplerate, ChannelLR::Left)
 			//, channelR(bufferSize, samplerate, ChannelLR::Right)
 		{
 			this->samplerate = samplerate;
+			this->bufferSize = blockSize;
 			//initFactoryChorus();
 			//initFactoryDullEchos();
 			//initFactoryHyperplane();
@@ -59,7 +60,7 @@ namespace CloudSeed
 		{
 			//parameters from Chorus Delay in
 			//https://github.com/ValdemarOrn/CloudSeed/tree/master/Factory%20Programs
-			parameters[(int)Parameter::InputMix] = 0.0;
+			// parameters[(int)Parameter::InputMix] = 0.0;
 			parameters[(int)Parameter::PreDelay] = 0.070000000298023224;
 			parameters[(int)Parameter::HighPass] = 0.0;
 			parameters[(int)Parameter::LowPass] = 0.29000008106231689;
@@ -94,7 +95,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::DelaySeed] = 0.00033700000494718552;
 			parameters[(int)Parameter::PostDiffusionSeed] = 0.00050099997315555811;
 			parameters[(int)Parameter::CrossSeed] = 0.0;
-			parameters[(int)Parameter::DryOut] = 0.94499987363815308;
+			// parameters[(int)Parameter::DryOut] =  = 0.94499987363815308;
 			parameters[(int)Parameter::PredelayOut] = 0.0;
 			parameters[(int)Parameter::EarlyOut] = 0.77999997138977051;
 			parameters[(int)Parameter::MainOut] = 0.74500006437301636;
@@ -121,7 +122,7 @@ namespace CloudSeed
 		{
 			//parameters from Dull Echos in
 			//https://github.com/ValdemarOrn/CloudSeed/tree/master/Factory%20Programs
-			parameters[(int)Parameter::InputMix] = 0.0;
+			// parameters[(int)Parameter::InputMix] = 0.0;
 			parameters[(int)Parameter::PreDelay] = 0.070000000298023224;
 			parameters[(int)Parameter::HighPass] = 0.0;
 			parameters[(int)Parameter::LowPass] = 0.29000008106231689;
@@ -156,7 +157,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::DelaySeed] = 0.0002730000123847276;
 			parameters[(int)Parameter::PostDiffusionSeed] = 0.00050099997315555811;
 			parameters[(int)Parameter::CrossSeed] = 0.5;
-			parameters[(int)Parameter::DryOut] = 1.0;
+			// parameters[(int)Parameter::DryOut] =  = 1.0;
 			parameters[(int)Parameter::PredelayOut] = 0.0;
 			parameters[(int)Parameter::EarlyOut] = 0.77999997138977051;
 			parameters[(int)Parameter::MainOut] = 0.74500006437301636;
@@ -184,7 +185,7 @@ namespace CloudSeed
 		{
 			//parameters from Hyperplane in
 			//https://github.com/ValdemarOrn/CloudSeed/tree/master/Factory%20Programs
-			parameters[(int)Parameter::InputMix] = 0.1549999862909317;
+			// parameters[(int)Parameter::InputMix] = 0.1549999862909317;
 			parameters[(int)Parameter::PreDelay] = 0.0;
 			parameters[(int)Parameter::HighPass] = 0.57999998331069946;
 			parameters[(int)Parameter::LowPass] = 0.9100000262260437;
@@ -219,7 +220,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::DelaySeed] = 0.00034699999378062785;
 			parameters[(int)Parameter::PostDiffusionSeed] = 0.00037200000951997936;
 			parameters[(int)Parameter::CrossSeed] = 0.800000011920929;
-			parameters[(int)Parameter::DryOut] = 0.86500018835067749;
+			// parameters[(int)Parameter::DryOut] =  = 0.86500018835067749;
 			parameters[(int)Parameter::PredelayOut] = 0.0;
 			parameters[(int)Parameter::EarlyOut] = 0.8200000524520874;
 			parameters[(int)Parameter::MainOut] = 0.79500007629394531;
@@ -247,7 +248,7 @@ namespace CloudSeed
 		{
 			//parameters from Medium Space in
 			//https://github.com/ValdemarOrn/CloudSeed/tree/master/Factory%20Programs
-			parameters[(int)Parameter::InputMix] = 0.0;
+			// parameters[(int)Parameter::InputMix] = 0.0;
 			parameters[(int)Parameter::PreDelay] = 0.0;
 			parameters[(int)Parameter::HighPass] = 0.0;
 			parameters[(int)Parameter::LowPass] = 0.63999992609024048;
@@ -282,7 +283,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::DelaySeed] = 0.0001610000035725534;
 			parameters[(int)Parameter::PostDiffusionSeed] = 0.00050099997315555811;
 			parameters[(int)Parameter::CrossSeed] = 0.7850000262260437;
-			parameters[(int)Parameter::DryOut] = 1.0;
+			// parameters[(int)Parameter::DryOut] =  = 1.0;
 			parameters[(int)Parameter::PredelayOut] = 0.0;
 			parameters[(int)Parameter::EarlyOut] = 0.699999988079071;
 			parameters[(int)Parameter::MainOut] = 0.84499984979629517;
@@ -309,7 +310,7 @@ namespace CloudSeed
 		{
 			//parameters from Noise In The Hallway in
 			//https://github.com/ValdemarOrn/CloudSeed/tree/master/Factory%20Programs
-			parameters[(int)Parameter::InputMix] = 0.0;
+			// parameters[(int)Parameter::InputMix] = 0.0;
 			parameters[(int)Parameter::PreDelay] = 0.0;
 			parameters[(int)Parameter::HighPass] = 0.0;
 			parameters[(int)Parameter::LowPass] = 0.60999995470047;
@@ -344,7 +345,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::DelaySeed] = 0.00018099999579135329;
 			parameters[(int)Parameter::PostDiffusionSeed] = 8.4999999671708792E-05;
 			parameters[(int)Parameter::CrossSeed] = 1.0;
-			parameters[(int)Parameter::DryOut] = 0.0;
+			// parameters[(int)Parameter::DryOut] =  = 0.0;
 			parameters[(int)Parameter::PredelayOut] = 0.0;
 			parameters[(int)Parameter::EarlyOut] = 0.64500010013580322;
 			parameters[(int)Parameter::MainOut] = 0.63000005483627319;
@@ -375,7 +376,7 @@ namespace CloudSeed
 		{
 			//parameters from Rubi-Ka Fields in
 			//https://github.com/ValdemarOrn/CloudSeed/tree/master/Factory%20Programs
-			parameters[(int)Parameter::InputMix] = 0.32499998807907104;
+			// parameters[(int)Parameter::InputMix] = 0.32499998807907104;
 			parameters[(int)Parameter::PreDelay] = 0.0;
 			parameters[(int)Parameter::HighPass] = 0.0;
 			parameters[(int)Parameter::LowPass] = 0.8899998664855957;
@@ -410,7 +411,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::DelaySeed] = 0.0001610000035725534;
 			parameters[(int)Parameter::PostDiffusionSeed] = 0.00050099997315555811;
 			parameters[(int)Parameter::CrossSeed] = 0.43000003695487976;
-			parameters[(int)Parameter::DryOut] = 0.88499999046325684;
+			// parameters[(int)Parameter::DryOut] =  = 0.88499999046325684;
 			parameters[(int)Parameter::PredelayOut] = 0.0;
 			parameters[(int)Parameter::EarlyOut] = 0.0;
 			parameters[(int)Parameter::MainOut] = 0.90999990701675415;
@@ -436,7 +437,7 @@ namespace CloudSeed
 		{
 			//parameters from Small Room in
 			//https://github.com/ValdemarOrn/CloudSeed/tree/master/Factory%20Programs
-			parameters[(int)Parameter::InputMix] = 0.0;
+			// parameters[(int)Parameter::InputMix] = 0.0;
 			parameters[(int)Parameter::PreDelay] = 0.0;
 			parameters[(int)Parameter::HighPass] = 0.0;
 			parameters[(int)Parameter::LowPass] = 0.755000114440918;
@@ -471,7 +472,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::DelaySeed] = 0.00033499998971819878;
 			parameters[(int)Parameter::PostDiffusionSeed] = 0.00037200000951997936;
 			parameters[(int)Parameter::CrossSeed] = 0.42500001192092896;
-			parameters[(int)Parameter::DryOut] = 1.0;
+			// parameters[(int)Parameter::DryOut] =  = 1.0;
 			parameters[(int)Parameter::PredelayOut] = 0.0;
 			parameters[(int)Parameter::EarlyOut] = 0.8599998950958252;
 			parameters[(int)Parameter::MainOut] = 0.90500003099441528;
@@ -496,7 +497,7 @@ namespace CloudSeed
 		{
 			//parameters from The 90s Are Back in
 			//https://github.com/ValdemarOrn/CloudSeed/tree/master/Factory%20Programs
-			parameters[(int)Parameter::InputMix] = 0;
+			// parameters[(int)Parameter::InputMix] = 0;
 			parameters[(int)Parameter::PreDelay] = 0;
 			parameters[(int)Parameter::HighPass] = 0;
 			parameters[(int)Parameter::LowPass] = 0.6750001311302185;
@@ -531,7 +532,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::DelaySeed] = 0.0003370000049471855;
 			parameters[(int)Parameter::PostDiffusionSeed] = 0.0005009999731555581;
 			parameters[(int)Parameter::CrossSeed] = 0.7950000166893005;
-			parameters[(int)Parameter::DryOut] = 0.9449997544288635;
+			// parameters[(int)Parameter::DryOut] =  = 0.9449997544288635;
 			parameters[(int)Parameter::PredelayOut] = 0;
 			parameters[(int)Parameter::EarlyOut] = 0.7250000238418579;
 			parameters[(int)Parameter::MainOut] = 0.6050001382827759;
@@ -556,7 +557,7 @@ namespace CloudSeed
 		{
 			//parameters from Through The Looking Glass in
 			//https://github.com/ValdemarOrn/CloudSeed/tree/master/Factory%20Programs
-			parameters[(int)Parameter::InputMix] = 0.0;
+			// parameters[(int)Parameter::InputMix] = 0.0;
 			parameters[(int)Parameter::PreDelay] = 0.0;
 			parameters[(int)Parameter::HighPass] = 0.0;
 			parameters[(int)Parameter::LowPass] = 0.74000012874603271;
@@ -591,7 +592,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::DelaySeed] = 0.0001610000035725534;
 			parameters[(int)Parameter::PostDiffusionSeed] = 0.00050099997315555811;
 			parameters[(int)Parameter::CrossSeed] = 1.0;
-			parameters[(int)Parameter::DryOut] = 0.0;
+			// parameters[(int)Parameter::DryOut] =  = 0.0;
 			parameters[(int)Parameter::PredelayOut] = 0.0;
 			parameters[(int)Parameter::EarlyOut] = 0.0;
 			parameters[(int)Parameter::MainOut] = 0.95499974489212036;
@@ -617,7 +618,7 @@ namespace CloudSeed
 		 */
 		void initGpt5VelvetVibratoPlane()
 		{
-			parameters[(int)Parameter::InputMix] = 0.15f;
+			// parameters[(int)Parameter::InputMix] = 0.15f;
 			parameters[(int)Parameter::PreDelay] = 0.01f; // ~10 ms, shorter than FactoryChorus
 			parameters[(int)Parameter::HighPass] = 0.25f;
 			parameters[(int)Parameter::LowPass] = 0.90f;
@@ -661,7 +662,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::PostDiffusionSeed] = 0.000451f;
 			parameters[(int)Parameter::CrossSeed] = 0.60f;
 
-			parameters[(int)Parameter::DryOut] = 0.95f;
+			// parameters[(int)Parameter::DryOut] =  = 0.95f;
 			parameters[(int)Parameter::PredelayOut] = 0.0f;
 			parameters[(int)Parameter::EarlyOut] = 0.80f;
 			parameters[(int)Parameter::MainOut] = 0.82f;
@@ -684,7 +685,7 @@ namespace CloudSeed
 		 */
 		void initGpt5WideMediumRoom()
 		{
-			parameters[(int)Parameter::InputMix] = 0.0f;
+			// parameters[(int)Parameter::InputMix] = 0.0f;
 			parameters[(int)Parameter::PreDelay] = 0.02f; // ~20 ms
 			parameters[(int)Parameter::HighPass] = 0.10f;
 			parameters[(int)Parameter::LowPass] = 0.80f;
@@ -728,7 +729,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::PostDiffusionSeed] = 0.000569f;
 			parameters[(int)Parameter::CrossSeed] = 0.50f;
 
-			parameters[(int)Parameter::DryOut] = 1.0f;
+			// parameters[(int)Parameter::DryOut] =  = 1.0f;
 			parameters[(int)Parameter::PredelayOut] = 0.0f;
 			parameters[(int)Parameter::EarlyOut] = 0.72f;
 			parameters[(int)Parameter::MainOut] = 0.88f;
@@ -750,7 +751,7 @@ namespace CloudSeed
 		 */
 		void initGpt5HallwayVibe()
 		{
-			parameters[(int)Parameter::InputMix] = 0.0f;
+			// parameters[(int)Parameter::InputMix] = 0.0f;
 			parameters[(int)Parameter::PreDelay] = 0.01f; // ~10 ms
 			parameters[(int)Parameter::HighPass] = 0.05f;
 			parameters[(int)Parameter::LowPass] = 0.64f;
@@ -796,7 +797,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::CrossSeed] = 1.0f;
 
 			// Slightly wet-leaning but usable in-line
-			parameters[(int)Parameter::DryOut] = 0.80f;
+			// parameters[(int)Parameter::DryOut] =  = 0.80f;
 			parameters[(int)Parameter::PredelayOut] = 0.0f;
 			parameters[(int)Parameter::EarlyOut] = 0.68f;
 			parameters[(int)Parameter::MainOut] = 0.68f;
@@ -821,7 +822,7 @@ namespace CloudSeed
 		 */
 		void initGpt5NaturalHallDense()
 		{
-			parameters[(int)Parameter::InputMix] = 0.0f;
+			// parameters[(int)Parameter::InputMix] = 0.0f;
 			parameters[(int)Parameter::PreDelay] = 0.012f; // ~12 ms
 			parameters[(int)Parameter::HighPass] = 0.08f;
 			parameters[(int)Parameter::LowPass] = 0.72f;
@@ -870,7 +871,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::CrossSeed]        = 0.90f;
 
 			// Output mix: balanced early and late
-			parameters[(int)Parameter::DryOut]      = 1.0f;
+			// parameters[(int)Parameter::DryOut] =       = 1.0f;
 			parameters[(int)Parameter::PredelayOut] = 0.0f;
 			parameters[(int)Parameter::EarlyOut]    = 0.72f;
 			parameters[(int)Parameter::MainOut]     = 0.88f;
@@ -895,7 +896,7 @@ namespace CloudSeed
 		 */
 		void initGpt5WarmCathedral()
 		{
-			parameters[(int)Parameter::InputMix] = 0.0f;
+			// parameters[(int)Parameter::InputMix] = 0.0f;
 			parameters[(int)Parameter::PreDelay] = 0.018f; // ~18 ms
 			parameters[(int)Parameter::HighPass] = 0.05f;
 			parameters[(int)Parameter::LowPass]  = 0.62f;
@@ -937,7 +938,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::PostDiffusionSeed] = 0.000593f;
 			parameters[(int)Parameter::CrossSeed]         = 1.0f;
 
-			parameters[(int)Parameter::DryOut]      = 1.0f;
+			// parameters[(int)Parameter::DryOut] =       = 1.0f;
 			parameters[(int)Parameter::PredelayOut] = 0.0f;
 			parameters[(int)Parameter::EarlyOut]    = 0.60f;
 			parameters[(int)Parameter::MainOut]     = 0.90f;
@@ -962,7 +963,7 @@ namespace CloudSeed
 		 */
 		void initGpt5AiryWideChamber()
 		{
-			parameters[(int)Parameter::InputMix] = 0.0f;
+			// parameters[(int)Parameter::InputMix] = 0.0f;
 			parameters[(int)Parameter::PreDelay] = 0.008f; // ~8 ms
 			parameters[(int)Parameter::HighPass] = 0.12f;
 			parameters[(int)Parameter::LowPass]  = 0.80f;
@@ -1004,7 +1005,7 @@ namespace CloudSeed
 			parameters[(int)Parameter::PostDiffusionSeed] = 0.000102f;
 			parameters[(int)Parameter::CrossSeed]         = 0.75f;
 
-			parameters[(int)Parameter::DryOut]      = 1.0f;
+			// parameters[(int)Parameter::DryOut] =       = 1.0f;
 			parameters[(int)Parameter::PredelayOut] = 0.0f;
 			parameters[(int)Parameter::EarlyOut]    = 0.78f;
 			parameters[(int)Parameter::MainOut]     = 0.82f;
@@ -1029,7 +1030,7 @@ namespace CloudSeed
         void initGpt5AmbientBloom()
         {
             // Input/tone
-            parameters[(int)Parameter::InputMix] = 0.0f;
+            // parameters[(int)Parameter::InputMix] = 0.0f;
             parameters[(int)Parameter::PreDelay] = 0.014f;   // short, keeps it cohesive
             parameters[(int)Parameter::HighPass] = 0.08f;    // tame rumble
             parameters[(int)Parameter::LowPass]  = 0.72f;    // not too bright (~10–12 kHz)
@@ -1080,7 +1081,7 @@ namespace CloudSeed
             parameters[(int)Parameter::CrossSeed]         = 0.68f;
 
             // Output balance: mostly late field; early kept lower for “bloomy” feel
-            parameters[(int)Parameter::DryOut]      = 0.92f;
+            // parameters[(int)Parameter::DryOut] =       = 0.92f;
             parameters[(int)Parameter::PredelayOut] = 0.0f;
             parameters[(int)Parameter::EarlyOut]    = 0.58f;
             parameters[(int)Parameter::MainOut]     = 0.94f;
@@ -1109,7 +1110,7 @@ namespace CloudSeed
 		 */
         void initGpt5ViolinSoloPlate()
         {
-            parameters[(int)Parameter::InputMix] = 0.0f;
+            // parameters[(int)Parameter::InputMix] = 0.0f;
             parameters[(int)Parameter::PreDelay] = 0.020f;   // ~20 ms (Abbey Road)
             parameters[(int)Parameter::HighPass] = 0.62f;    // ~500–700 Hz HPF on verb
             parameters[(int)Parameter::LowPass]  = 0.76f;    // ~10–11 kHz LPF
@@ -1153,7 +1154,7 @@ namespace CloudSeed
             parameters[(int)Parameter::PostDiffusionSeed] = 0.000439f;
             parameters[(int)Parameter::CrossSeed]         = 0.60f;
 
-            parameters[(int)Parameter::DryOut]      = 1.0f;
+            // parameters[(int)Parameter::DryOut] =       = 1.0f;
             parameters[(int)Parameter::PredelayOut] = 0.0f;
             parameters[(int)Parameter::EarlyOut]    = 0.62f;
             parameters[(int)Parameter::MainOut]     = 0.86f;
@@ -1176,7 +1177,7 @@ namespace CloudSeed
 		 */
         void initGpt5ViolinChamber()
         {
-            parameters[(int)Parameter::InputMix] = 0.0f;
+            // parameters[(int)Parameter::InputMix] = 0.0f;
             parameters[(int)Parameter::PreDelay] = 0.012f;   // ~12 ms
             parameters[(int)Parameter::HighPass] = 0.58f;    // ~450–650 Hz
             parameters[(int)Parameter::LowPass]  = 0.80f;    // slightly airier cap
@@ -1220,7 +1221,7 @@ namespace CloudSeed
             parameters[(int)Parameter::PostDiffusionSeed] = 0.000593f;
             parameters[(int)Parameter::CrossSeed]         = 0.50f;
 
-            parameters[(int)Parameter::DryOut]      = 1.0f;
+            // parameters[(int)Parameter::DryOut] =       = 1.0f;
             parameters[(int)Parameter::PredelayOut] = 0.0f;
             parameters[(int)Parameter::EarlyOut]    = 0.70f;
             parameters[(int)Parameter::MainOut]     = 0.78f;
@@ -1243,7 +1244,7 @@ namespace CloudSeed
 		 */
         void initGpt5ViolinHallWide()
         {
-            parameters[(int)Parameter::InputMix] = 0.0f;
+            // parameters[(int)Parameter::InputMix] = 0.0f;
             parameters[(int)Parameter::PreDelay] = 0.024f;   // ~24 ms (Abbey Road)
             parameters[(int)Parameter::HighPass] = 0.66f;    // ~600–800 Hz
             parameters[(int)Parameter::LowPass]  = 0.72f;    // ~9–10 kHz
@@ -1287,7 +1288,7 @@ namespace CloudSeed
             parameters[(int)Parameter::PostDiffusionSeed] = 0.000379f;
             parameters[(int)Parameter::CrossSeed]         = 0.68f;
 
-            parameters[(int)Parameter::DryOut]      = 1.0f;
+            // parameters[(int)Parameter::DryOut] =       = 1.0f;
             parameters[(int)Parameter::PredelayOut] = 0.0f;
             parameters[(int)Parameter::EarlyOut]    = 0.55f;
             parameters[(int)Parameter::MainOut]     = 0.92f;
@@ -1316,7 +1317,7 @@ namespace CloudSeed
 		 */
         void initGpt5GrainBloomCloud()
         {
-            parameters[(int)Parameter::InputMix] = 0.0f;
+            // parameters[(int)Parameter::InputMix] = 0.0f;
             parameters[(int)Parameter::PreDelay] = 0.016f;
             parameters[(int)Parameter::HighPass] = 0.10f;
             parameters[(int)Parameter::LowPass]  = 0.78f;
@@ -1359,7 +1360,7 @@ namespace CloudSeed
             parameters[(int)Parameter::PostDiffusionSeed] = 0.000311f;
             parameters[(int)Parameter::CrossSeed]         = 0.33f;
 
-            parameters[(int)Parameter::DryOut]      = 1.0f;
+            // parameters[(int)Parameter::DryOut] =       = 1.0f;
             parameters[(int)Parameter::PredelayOut] = 0.0f;
             parameters[(int)Parameter::EarlyOut]    = 0.68f;
             parameters[(int)Parameter::MainOut]     = 0.92f;
@@ -1384,7 +1385,7 @@ namespace CloudSeed
 		 */
         void initGpt5NearInfinitePad()
         {
-            parameters[(int)Parameter::InputMix] = 0.0f;
+            // parameters[(int)Parameter::InputMix] = 0.0f;
             parameters[(int)Parameter::PreDelay] = 0.004f;
             parameters[(int)Parameter::HighPass] = 0.22f; // clears mud
             parameters[(int)Parameter::LowPass]  = 0.66f; // darker top
@@ -1427,7 +1428,7 @@ namespace CloudSeed
             parameters[(int)Parameter::PostDiffusionSeed] = 0.000537f;
             parameters[(int)Parameter::CrossSeed]         = 0.90f;
 
-            parameters[(int)Parameter::DryOut]      = 1.0f;
+            // parameters[(int)Parameter::DryOut] =       = 1.0f;
             parameters[(int)Parameter::PredelayOut] = 0.0f;
             parameters[(int)Parameter::EarlyOut]    = 0.42f;
             parameters[(int)Parameter::MainOut]     = 0.97f;
@@ -1450,7 +1451,7 @@ namespace CloudSeed
 		 */
         void initGpt5GhostGateMidband()
         {
-            parameters[(int)Parameter::InputMix] = 0.0f;
+            // parameters[(int)Parameter::InputMix] = 0.0f;
             parameters[(int)Parameter::PreDelay] = 0.030f;
             parameters[(int)Parameter::HighPass] = 0.72f; // pushes verb out of low end
             parameters[(int)Parameter::LowPass]  = 0.58f; // trims fizz
@@ -1493,7 +1494,7 @@ namespace CloudSeed
             parameters[(int)Parameter::PostDiffusionSeed] = 0.000691f;
             parameters[(int)Parameter::CrossSeed]         = 0.20f;
 
-            parameters[(int)Parameter::DryOut]      = 1.0f;
+            // parameters[(int)Parameter::DryOut] =       = 1.0f;
             parameters[(int)Parameter::PredelayOut] = 0.0f;
             parameters[(int)Parameter::EarlyOut]    = 0.92f;
             parameters[(int)Parameter::MainOut]     = 0.60f;
@@ -1558,7 +1559,7 @@ namespace CloudSeed
 
 				// Late
 			//case Parameter::LineCount:                 return 1 + (int)(P(Parameter::LineCount) * 11.999);
-                        case Parameter::LineCount:                 return (int)(P(Parameter::LineCount));
+            case Parameter::LineCount:                 return (int)(P(Parameter::LineCount)); // Changed to int as now controlled by hardware switches
 			case Parameter::LineDelay:                 return (int)(20.0 + ValueTables::Get(P(Parameter::LineDelay), ValueTables::Response2Dec) * 980);
 			case Parameter::LineDecay:                 return 0.05 + ValueTables::Get(P(Parameter::LineDecay), ValueTables::Response3Dec) * 59.95;
 
@@ -1630,30 +1631,10 @@ namespace CloudSeed
 			//channelR.ClearBuffers();
 		}
 
-		void Process(float* input, float* output, int bufferSize)
+		float* Process(float* input, int bufferSize)
 		{
-			auto len = bufferSize;
-			//auto cm = GetScaledParameter(Parameter::InputMix) * 0.5; // Removing L/R mixing for Mono Terrarium
-			//auto cmi = (1 - cm);                                     // Removing L/R mixing for Mono Terrarium
-
-			for (int i = 0; i < len; i++)
-			{
-				//leftChannelIn[i] = input[i *2] // * cmi + input[i*2+1] * cm;
-                leftChannelIn[i] = input[i];                        // Removing L/R mixing for Mono Terrarium
-				//rightChannelIn[i] = input[i*2+1] * cmi + input[i*2] * cm;
-			}
-
-			channelL.Process(leftChannelIn, len);
-			//channelR.Process(rightChannelIn, len);
-			auto leftOut = channelL.GetOutput();
-			//auto rightOut = channelR.GetOutput();
-
-			for (int i = 0; i < len; i++)
-			{
-				//output[i*2] = leftOut[i];
-                output[i] = leftOut[i];
-				//output[i*2+1] = rightOut[i];
-			}
+			channelL.Process(input, bufferSize);
+			return channelL.GetOutput();
 		}
 		
 	private:
