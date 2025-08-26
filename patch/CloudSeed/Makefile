@@ -8,6 +8,9 @@ LIBDAISY_DIR = ../../libdaisy
 DAISYSP_DIR = ../../DaisySP
 CLOUDSEED_DIR = ../../CloudSeed
 
+# Optimize for performance.  USe -Os if you need opt for size so it fits internal FLASH
+OPT = -O3
+
 # Core location, and generic Makefile.
 SYSTEM_FILES_DIR = $(LIBDAISY_DIR)/core
 include $(SYSTEM_FILES_DIR)/Makefile
