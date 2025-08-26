@@ -1,9 +1,3 @@
-// Modified version of DaisyCloudSeed by Keith Bloemer.
-// Intended for the Terrarrium guitar pedal hardware.
-// Code has been modified for mono processing (originally stereo) to 
-// allow up to 5 delay lines on the Daisy Seed.
-
-#include "daisy_petal.h"
 #include "daisysp.h"
 #include "terrarium.h"
 
@@ -17,14 +11,14 @@
 #include <cstring>
 
 // Fast LFSR PRNG for audio/ISR-safe randomness, currently unused.
-static thread_local inline uint32_t lfsr_rand()
-{
-    static uint32_t lfsr = 0xACE1u;
-    lfsr ^= lfsr << 13;
-    lfsr ^= lfsr >> 17;
-    lfsr ^= lfsr << 5;
-    return lfsr;
-}
+// static thread_local inline uint32_t lfsr_rand()
+// {
+//     static uint32_t lfsr = 0xACE1u;
+//     lfsr ^= lfsr << 13;
+//     lfsr ^= lfsr >> 17;
+//     lfsr ^= lfsr << 5;
+//     return lfsr;
+// }
 
 #include "../../CloudSeed/Default.h"
 #include "../../CloudSeed/ReverbController.h"
@@ -52,23 +46,22 @@ std::atomic<int> preset{0};
 Led led1, led2;
 
 // Shared flags/commands set from main() (non-audio) and consumed in audio callback
-static std::atomic<int> g_desiredNumLines{1};
+static std::atomic<int> g_requestedNumLines{1};
 static std::atomic<bool> g_cyclePresetRequested{false};
 static std::atomic<bool> g_toggleBypassRequested{false};
 // Precomputed switch indices for main loop
 static const int g_delay_switches[4] = { Terrarium::SWITCH_1, Terrarium::SWITCH_2, Terrarium::SWITCH_3, Terrarium::SWITCH_4 };
 
-// deadband threshold: ignore pot changes smaller than one step (0.002 ~= 1/500, so each pot has 500 steps)
-constexpr float PARAM_EPS = 0.002f;
+// Maximum audio block size we expect to handle; buffers live in BSS to avoid stack churn
+constexpr size_t AUDIO_MAX_BLOCK = 96;
 // update analog controls every N audio blocks to reduce audio-thread work
 constexpr int CONTROL_UPDATE_BLOCKS = 4;
+// deadband threshold: ignore pot changes smaller than one step (0.005 ~= 1/200, so each pot has 200 steps)
+constexpr float PARAM_EPS = 0.005f;
 
 // For fade outs of controls when bypass pressed
 constexpr int EARLY_BYPASS_BLOCKS = 500 / CONTROL_UPDATE_BLOCKS;  // 500ms when 48000hz Fs and 48 block size
 constexpr int LATE_BYPASS_BLOCKS = 12000 / CONTROL_UPDATE_BLOCKS;
-
-// Maximum audio block size we expect to handle; buffers live in BSS to avoid stack churn
-constexpr size_t AUDIO_MAX_BLOCK = 128;
 
 // Persistent reverb IO buffers (BSS)
 static float g_reverbIn[AUDIO_MAX_BLOCK];
@@ -177,7 +170,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
         // Simulate footswitch press behavior: toggle bypassing/bypassed states
         if (bypassing || bypassed) {
             bypassing = bypassed = false;
-            led1.Set(0.9f);
+            led1.Set(1.0f);
             // reset fade counters
             // (these will be picked up next time analog controls are processed)
         }
@@ -200,6 +193,8 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     // Downsample analog control reads to reduce ADC work and avoid calling SetParameter unnecessarily.
     if ((--control_block_ctr <= 0 && !bypassed) || updateParms)
     {
+        updateParms = false;
+
         led1.Update();
         led2.Update();
         control_block_ctr = CONTROL_UPDATE_BLOCKS;
@@ -278,9 +273,9 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
 
 
     // Delay Line Switches
-    // The main loop computes desired num lines and writes into g_desiredNumLines.
+    // The main loop computes desired num lines and writes into g_requestedNumLines.
     // Read it here and update reverb if changed.
-    int numDelayLines = g_desiredNumLines.load();
+    int numDelayLines = g_requestedNumLines.load();
     if (prevNumLines != numDelayLines) {
     if (reverb) reverb->SetParameter(::Parameter::LineCount, numDelayLines);
         prevNumLines = numDelayLines;
@@ -373,14 +368,14 @@ int main(void)
             g_cyclePresetRequested.store(true);
         }
 
-        // Compute desired number of delay lines from the three switches. Keep
+        // Compute requested number of delay lines from the three switches. Keep
         // this calculation here so the audio thread only reads the atomic value.
-        int desired = 2;
+        int requestedLines = 2;
         for (int i = 0; i < 4; ++i) {
             if (hw.switches[g_delay_switches[i]].Pressed())
-                desired += 1;
+                requestedLines += 1;
         }
-        g_desiredNumLines.store(desired);
+        g_requestedNumLines.store(requestedLines);
 
         // LED2 shows preset activity; deterministic blink counters.
         static int led2Counter = 0;
@@ -419,7 +414,7 @@ int main(void)
                 break;
         }
 
-        led2.Set(led2State ? 0.1f : 0.0f);
+        led2.Set(led2State ? 1.0f : 0.0f);
         // Update after Set so change takes effect immediately
 
         // Work out CPU load every 250ms
@@ -434,6 +429,6 @@ int main(void)
         // advance indicator state machine
         cpu_led_indicator.Tick(System::GetNow());
 
-        System::Delay(8);
+        System::Delay(10);
     }
 }
