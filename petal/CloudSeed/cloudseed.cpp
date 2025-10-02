@@ -31,7 +31,7 @@ using namespace daisysp;
 using namespace terrarium;  // This is important for mapping the correct controls to the Daisy Seed on Terrarium PCB
 
 DaisyPetal hw;
-::daisy::Parameter earlyOut, lateOut, lineDecay, diffusion, tapDecay;
+::daisy::Parameter earlyOut, lateOut, lineDecay, diffusion, tapDecay, brightness;
 
 // Use enum-indexed arrays for preset values and their ranges. This is
 // simpler and type-safe compared to string-keyed maps.
@@ -126,10 +126,13 @@ static inline void applyPreset(int idx)
         // case 2: reverb->initFactoryChorus(); break;
         // case 3: reverb->initFactoryRubiKaFields(); break;
 
-        case 0: reverb->initFactoryThroughTheLookingGlass(); break;
-        case 1: reverb->initGpt5AmbientBloom(); break;
-        case 2: reverb->initGpt5GrainBloomCloud(); break;
-        case 3: reverb->initGpt5ViolinHallWide(); break;
+        // case 0: reverb->initFactoryThroughTheLookingGlass(); break;
+        // case 1: reverb->initGpt5AmbientBloom(); break;
+        // case 2: reverb->initGpt5GrainBloomCloud(); break;
+        // case 3: reverb->initGpt5ViolinHallWide(); break;
+        case 0: reverb->initFactorySmallRoom(); break;
+        case 1: reverb->initFactoryNoiseInTheHallway(); break;
+        case 2: reverb->initGpt5AiryWideChamber(); break;
         
         default: break;
 
@@ -150,7 +153,8 @@ static inline void applyPreset(int idx)
         ::Parameter::MainOut,
         ::Parameter::LineDecay,
         ::Parameter::TapDecay,
-        ::Parameter::LateDiffusionFeedback
+        ::Parameter::LateDiffusionFeedback,
+        ::Parameter::LowPass
     };
 
     for (auto p : paramsToRead)
@@ -170,7 +174,7 @@ void cyclePreset()
 {
     int p = preset.load();
     p += 1;
-    if (p > 3) {
+    if (p > 2) {
         p = 0;
     }
     preset.store(p);
@@ -213,8 +217,8 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     static int lateBypassCountdown = LATE_BYPASS_BLOCKS;
 
     static int control_block_ctr = 0;
-    static float earlyValue, lateValue, lineDecayValue, diffusionValue, tapDecayValue;
-    static float prevEarlyOut, prevLateOut, prevLineDecay, prevDiffusion, prevTapDecay;
+    static float earlyValue, lateValue, lineDecayValue, diffusionValue, tapDecayValue, brightnessValue;
+    static float prevEarlyOut, prevLateOut, prevLineDecay, prevDiffusion, prevTapDecay, prevBrightness;
     static int prevNumLines = -1;
 
         
@@ -236,6 +240,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
             lineDecayValue      = lineDecay.Process();
             diffusionValue = diffusion.Process();
             tapDecayValue       = tapDecay.Process();
+            brightnessValue = brightness.Process();
         }
 
         // When bypassing allow trails then fade everything off before we stop processing reverb
@@ -297,6 +302,16 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
             reverb->SetParameter(::Parameter::TapDecay, scaled);
             prevTapDecay = tapDecayValue;
         }
+
+        // Brightness: map knob 1 to the late reverb low-pass cutoff.
+        // Higher knob -> higher cutoff (brighter tail). Centered around preset value.
+        if (fabsf(prevBrightness - brightnessValue) > PARAM_EPS || updateParms) {
+            float presetValue = presetValues[(int)::Parameter::LowPass];
+            float factor      = valueRanges[(int)::Parameter::LowPass];
+            float scaled      = presetValue + (brightnessValue - 0.5f) * factor;
+            reverb->SetParameter(::Parameter::LowPass, scaled);
+            prevBrightness = brightnessValue;
+        }
     }
 
 
@@ -347,7 +362,8 @@ int main(void)
 	hw.SetAudioBlockSize(AUDIO_BLOCK_SIZE);
     samplerate = hw.AudioSampleRate();
 
-    //dry.Init(hw.knob[Terrarium::KNOB_1], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
+
+    brightness.Init(hw.knob[Terrarium::KNOB_1], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     earlyOut.Init(hw.knob[Terrarium::KNOB_2], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     lateOut.Init(hw.knob[Terrarium::KNOB_3], 0.0f, 1.0f, ::daisy::Parameter::LINEAR);
     diffusion.Init(hw.knob[Terrarium::KNOB_4], 0.0f, 1.0f, ::daisy::Parameter::LINEAR); 
@@ -409,7 +425,7 @@ int main(void)
         if (curPreset != prevPreset) {
             prevPreset = curPreset;
             led2Counter = 0;
-            if (curPreset == 3) {
+            if (curPreset == 2) {
                 led2State = true; // steady on
             } else {
                 led2State = false; // start off for blink presets
@@ -420,19 +436,19 @@ int main(void)
             case 0:
                 led2State = false;
                 break;
+            // case 1:
+            //     if (++led2Counter >= 30) { // ~300ms @ ~10ms loop
+            //         led2State = !led2State;
+            //         led2Counter = 0;
+            //     }
+            //     break;
             case 1:
-                if (++led2Counter >= 30) { // ~300ms @ ~10ms loop
-                    led2State = !led2State;
-                    led2Counter = 0;
-                }
-                break;
-            case 2:
                 if (++led2Counter >= 10) { // ~100ms @ ~10ms loop
                     led2State = !led2State;
                     led2Counter = 0;
                 }
                 break;
-            case 3:
+            case 2:
                 led2State = true; // steady on
                 break;
         }
