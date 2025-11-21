@@ -53,11 +53,11 @@ static std::atomic<bool> g_toggleBypassRequested{false};
 static const int g_delay_switches[4] = { Terrarium::SWITCH_1, Terrarium::SWITCH_2, Terrarium::SWITCH_3, Terrarium::SWITCH_4 };
 
 // Maximum audio block size we expect to handle; buffers live in BSS to avoid stack churn
-constexpr size_t AUDIO_BLOCK_SIZE = 96;
+constexpr size_t AUDIO_BLOCK_SIZE = 4;
 // update analog controls every N audio blocks to reduce audio-thread work
-constexpr int CONTROL_UPDATE_BLOCKS = 4;
+constexpr int CONTROL_UPDATE_BLOCKS = 198;
 // deadband threshold: ignore pot changes smaller than one step (0.005 ~= 1/200, so each pot has 200 steps)
-constexpr float PARAM_EPS = 0.005f;
+constexpr float PARAM_EPS = 0.01f;
 
 // For fade outs of controls when bypass pressed
 constexpr int EARLY_BYPASS_BLOCKS = 500 / CONTROL_UPDATE_BLOCKS;  // 500ms when 48000hz Fs and 48 block size
@@ -130,9 +130,16 @@ static inline void applyPreset(int idx)
         // case 1: reverb->initGpt5AmbientBloom(); break;
         // case 2: reverb->initGpt5GrainBloomCloud(); break;
         // case 3: reverb->initGpt5ViolinHallWide(); break;
-        case 0: reverb->initFactorySmallRoom(); break;
-        case 1: reverb->initFactoryNoiseInTheHallway(); break;
-        case 2: reverb->initGpt5AiryWideChamber(); break;
+
+        // Previous faves
+        // case 0: reverb->initFactorySmallRoom(); break;
+        case 0: reverb->initFactoryNoiseInTheHallway(); break;
+        case 1: reverb->initGpt5AiryWideChamber(); break;
+
+        // Most efficient?
+        // case 0: reverb->initFactorySmallRoom(); break;
+        // case 1: reverb->initFactoryChorus(); break;
+        //case 2: reverb->initGpt5NearInfinitePad(); break;
         
         default: break;
 
@@ -174,7 +181,7 @@ void cyclePreset()
 {
     int p = preset.load();
     p += 1;
-    if (p > 2) {
+    if (p > 1) {
         p = 0;
     }
     preset.store(p);
@@ -226,7 +233,8 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     // Downsample analog control reads to reduce ADC work and avoid calling SetParameter unnecessarily.
     if ((--control_block_ctr <= 0 && !bypassed) || updateParms)
     {
-        updateParms = false;
+        bool forceUpdate = updateParms;
+        updateParms      = false;
 
         led1.Update();
         led2.Update();
@@ -267,35 +275,35 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
             }
         }
 
-        if (fabsf(prevEarlyOut - earlyValue) > PARAM_EPS || updateParms) {
+        if (fabsf(prevEarlyOut - earlyValue) > PARAM_EPS || forceUpdate) {
             float presetValue = presetValues[(int)::Parameter::EarlyOut];
             float factor      = valueRanges[(int)::Parameter::EarlyOut];
             float scaled      = presetValue + (earlyValue - 0.5f) * factor;
             reverb->SetParameter(::Parameter::EarlyOut, scaled);
             prevEarlyOut = earlyValue;
         }
-        if (fabsf(prevLateOut - lateValue) > PARAM_EPS || updateParms) {
+        if (fabsf(prevLateOut - lateValue) > PARAM_EPS || forceUpdate) {
             float presetValue = presetValues[(int)::Parameter::MainOut];
             float factor      = valueRanges[(int)::Parameter::MainOut];
             float scaled      = presetValue + (lateValue - 0.5f) * factor;
             reverb->SetParameter(::Parameter::MainOut, scaled);
             prevLateOut = lateValue;
         }
-        if (fabsf(prevLineDecay - lineDecayValue) > PARAM_EPS || updateParms) {
+        if (fabsf(prevLineDecay - lineDecayValue) > PARAM_EPS || forceUpdate) {
             float presetValue = presetValues[(int)::Parameter::LineDecay];
             float factor      = valueRanges[(int)::Parameter::LineDecay];
             float scaled      = presetValue + (lineDecayValue - 0.5f) * factor;
             reverb->SetParameter(::Parameter::LineDecay, scaled);
             prevLineDecay = lineDecayValue;
         }
-        if (fabsf(prevDiffusion - diffusionValue) > PARAM_EPS || updateParms) {
+        if (fabsf(prevDiffusion - diffusionValue) > PARAM_EPS || forceUpdate) {
             float presetValue = presetValues[(int)::Parameter::LateDiffusionFeedback];
             float factor      = valueRanges[(int)::Parameter::LateDiffusionFeedback];
             float scaled      = presetValue + (diffusionValue - 0.5f) * factor;
             reverb->SetParameter(::Parameter::LateDiffusionFeedback, scaled);
             prevDiffusion = diffusionValue;
         }
-        if (fabsf(prevTapDecay - tapDecayValue) > PARAM_EPS || updateParms) {
+        if (fabsf(prevTapDecay - tapDecayValue) > PARAM_EPS || forceUpdate) {
             float presetValue = presetValues[(int)::Parameter::TapDecay];
             float factor      = valueRanges[(int)::Parameter::TapDecay];
             float scaled      = presetValue + (tapDecayValue - 0.5f) * factor;
@@ -305,7 +313,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
 
         // Brightness: map knob 1 to the late reverb low-pass cutoff.
         // Higher knob -> higher cutoff (brighter tail). Centered around preset value.
-        if (fabsf(prevBrightness - brightnessValue) > PARAM_EPS || updateParms) {
+        if (fabsf(prevBrightness - brightnessValue) > PARAM_EPS || forceUpdate) {
             float presetValue = presetValues[(int)::Parameter::LowPass];
             float factor      = valueRanges[(int)::Parameter::LowPass];
             float scaled      = presetValue + (brightnessValue - 0.5f) * factor;
@@ -320,7 +328,7 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     // Read it here and update reverb if changed.
     int numDelayLines = g_requestedNumLines.load();
     if (prevNumLines != numDelayLines) {
-    reverb->SetParameter(::Parameter::LineCount, numDelayLines);
+        reverb->SetParameter(::Parameter::LineCount, numDelayLines);
         prevNumLines = numDelayLines;
     }
 
@@ -347,11 +355,10 @@ static void AudioCallback(AudioHandle::InputBuffer  in,
     }
 
 
-    // LED2 handled in main loop to avoid audio-thread work.
-
-
     cpu_meter.OnBlockEnd();
 }
+
+
 
 int main(void)
 {
@@ -409,52 +416,20 @@ int main(void)
 
         // Compute requested number of delay lines from the three switches. Keep
         // this calculation here so the audio thread only reads the atomic value.
-        int requestedLines = 2;
+        int requestedLines = 1;
         for (int i = 0; i < 4; ++i) {
             if (hw.switches[g_delay_switches[i]].Pressed())
                 requestedLines += 1;
         }
         g_requestedNumLines.store(requestedLines);
 
-        // LED2 shows preset activity; deterministic blink counters.
-        static int led2Counter = 0;
-        static bool led2State = false;
-        static int prevPreset = -1;
 
-        int curPreset = preset.load();
-        if (curPreset != prevPreset) {
-            prevPreset = curPreset;
-            led2Counter = 0;
-            if (curPreset == 2) {
-                led2State = true; // steady on
-            } else {
-                led2State = false; // start off for blink presets
-            }
+        if (preset.load() == 1) {
+            led2.Set(true);
+        } else {
+            led2.Set(false);
         }
 
-        switch (curPreset) {
-            case 0:
-                led2State = false;
-                break;
-            // case 1:
-            //     if (++led2Counter >= 30) { // ~300ms @ ~10ms loop
-            //         led2State = !led2State;
-            //         led2Counter = 0;
-            //     }
-            //     break;
-            case 1:
-                if (++led2Counter >= 10) { // ~100ms @ ~10ms loop
-                    led2State = !led2State;
-                    led2Counter = 0;
-                }
-                break;
-            case 2:
-                led2State = true; // steady on
-                break;
-        }
-
-        led2.Set(led2State ? 1.0f : 0.0f);
-        // Update after Set so change takes effect immediately
 
         // Work out CPU load every 250ms
         static uint32_t last_ms = 0;

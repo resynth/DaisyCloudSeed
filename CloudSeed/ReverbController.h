@@ -40,9 +40,9 @@ namespace CloudSeed
 			//initFactoryDullEchos();
 			//initFactoryHyperplane();
 			//initFactoryMediumSpace();
-			//initFactoryNoiseInTheHallway();
+			initFactoryNoiseInTheHallway();
 			//initFactoryRubiKaFields();
-			initFactorySmallRoom();
+			//initFactorySmallRoom();
 			//initFactory90sAreBack();
 			//initFactoryThroughTheLookingGlass();
 			
